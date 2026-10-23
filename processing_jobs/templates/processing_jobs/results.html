@@ -1,0 +1,136 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Extraction Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f5f9;
+            margin: 0;
+            padding: 30px 16px;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+        }
+        .status { font-weight: bold; }
+        .success { color: #16733c; }
+        .error { color: #bd2525; }
+        pre {
+            background: #f4f6fa;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            display: block;
+            overflow-x: auto;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th { background: #f4f6fa; }
+        a, button {
+            display: inline-block;
+            margin: 8px 8px 8px 0;
+            padding: 10px 14px;
+            border-radius: 6px;
+            background-color: #2457d6;
+            color: #f3f5f9;
+        }
+        a.button {
+            display: inline-block;
+            padding: 10px 14px;
+            background: #2457d6;
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Document Extraction Results</h1>
+
+    <p><strong>File:</strong> {{ job.file_name }}</p>
+    <p><strong>Job ID:</strong> {{ job.id }}</p>
+    <p>
+        <strong>Status:</strong>
+        <span class="status">{{ job.status }}</span>
+    </p>
+
+    
+{% if job.status == "processing" and not result %}
+    <h5>Ready to Extract</h5>
+    <p>Your document is uploaded. Click the button below when you are ready to extract its data.</p>
+
+    <form method="post" action="{% url 'processing_jobs:extract' job.id %}">
+        {% csrf_token %}
+        <button type="submit">Extract Data</button>
+    </form>
+{% endif %}
+
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    {% if result %}
+        <p class="success">Extraction completed successfully.</p>
+
+        <a class="button" href="{% url 'processing_jobs:download_json' job.id %}">
+            Download JSON
+        </a>
+        <a class="button" href="{% url 'processing_jobs:upload' %}">
+            Upload Another File
+        </a>
+
+        {% if result.text %}
+            <h2>Extracted PDF Text</h2>
+            <pre>{{ result.text|truncatechars:12000 }}</pre>
+
+            <h2>Page Details</h2>
+            {% for page in result.pages %}
+                <h3>Page {{ page.page }}</h3>
+                <pre>{{ page.text|truncatechars:3000 }}</pre>
+            {% endfor %}
+        {% endif %}
+
+        
+{% if result.data %}
+    <h2>Extracted CSV Data</h2>
+    <p>Rows: {{ result.row_count }}</p>
+    <pre>{{ result.data|slice:":20" }}</pre>
+    <p>Preview limited to 20 rows. Download the JSON for structured data.</p>
+{% endif %}
+
+        {% if result.sheets %}
+            <h2>Excel Worksheets</h2>
+            {% for sheet_name, sheet in result.sheets.items %}
+                <h3>{{ sheet_name }}</h3>
+                <p>Rows: {{ sheet.row_count }}</p>
+                <pre>{{ sheet.data|slice:":10" }}</pre>
+            {% endfor %}
+        {% endif %}
+    {% endif %}
+
+    <p>
+    <a class="button" href="{% url 'processing_jobs:dashboard' %}">
+        Back to Dashboard
+    </a>
+</p>
+</div>
+</body>
+</html>

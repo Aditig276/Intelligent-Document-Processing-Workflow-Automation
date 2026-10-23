@@ -1,0 +1,73 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f5f9;
+            margin: 0;
+            padding: 40px 16px;
+        }
+
+        .container {
+            max-width: 520px;
+            margin: 40px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px #00000012;
+        }
+
+        h1 { margin-top: 0; color: #24324a; }
+        p { color: #596579; }
+        input[type="file"] {
+            display: block;
+            margin: 20px 0;
+            width: 100%;
+        }
+
+        button {
+            background: #2457d6;
+            color: white;
+            border: 0;
+            border-radius: 6px;
+            padding: 12px 20px;
+            cursor: pointer;
+        }
+
+        .success { color: #16733c; }
+        .error { color: #bd2525; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Document</h1>
+        <p>Upload a PDF, CSV, Excel spreadsheet, or image (max 10 MB).</p>
+
+        {% for message in messages %}
+            <p class="success">{{ message }}</p>
+        {% endfor %}
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            {{ form.file.label_tag }}
+            {{ form.file }}
+
+            {% if form.file.help_text %}
+                <p>{{ form.file.help_text }}</p>
+            {% endif %}
+
+            {% for error in form.file.errors %}
+                <p class="error">{{ error }}</p>
+            {% endfor %}
+
+            <button type="submit">Upload Document</button>
+        </form>
+    </div>
+</body>
+</html>

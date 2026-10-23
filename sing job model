@@ -1,0 +1,48 @@
+[1mdiff --git a/processing_jobs/models.py b/processing_jobs/models.py[m
+[1mnew file mode 100644[m
+[1mindex 0000000..99ffff8[m
+[1m--- /dev/null[m
+[1m+++ b/processing_jobs/models.py[m
+[36m@@ -0,0 +1,42 @@[m
+[32m+[m
+[32m+[m[32mfrom django.db import models[m
+[32m+[m
+[32m+[m
+[32m+[m[32mclass ProcessingJob(models.Model):[m
+[32m+[m
+[32m+[m[32m    class Status(models.TextChoices):[m
+[32m+[m[32m        PENDING = "pending", "Pending"[m
+[32m+[m[32m        PROCESSING = "processing", "Processing"[m
+[32m+[m[32m        COMPLETED = "completed", "Completed"[m
+[32m+[m[32m        FAILED = "failed", "Failed"[m
+[32m+[m
+[32m+[m[32m    file_name = models.CharField(max_length=255)[m
+[32m+[m[32m    file_type = models.CharField(max_length=20)[m
+[32m+[m[32m    file_size = models.PositiveBigIntegerField(default=0)[m
+[32m+[m
+[32m+[m[32m    storage_reference = models.CharField([m
+[32m+[m[32m        max_length=500,[m
+[32m+[m[32m        blank=True,[m
+[32m+[m[32m        default="",[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    status = models.CharField([m
+[32m+[m[32m        max_length=20,[m
+[32m+[m[32m        choices=Status.choices,[m
+[32m+[m[32m        default=Status.PENDING,[m
+[32m+[m[32m        db_index=True,[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    error_message = models.TextField([m
+[32m+[m[32m        blank=True,[m
+[32m+[m[32m        default="",[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m    created_at = models.DateTimeField(auto_now_add=True)[m
+[32m+[m[32m    updated_at = models.DateTimeField(auto_now=True)[m
+[32m+[m
+[32m+[m[32m    class Meta:[m
+[32m+[m[32m        ordering = ["-created_at"][m
+[32m+[m
+[32m+[m[32m    def __str__(self):[m
+[32m+[m[32m        return f"{self.file_name} - {self.status}"[m
