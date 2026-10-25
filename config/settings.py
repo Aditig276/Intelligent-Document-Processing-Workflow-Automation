@@ -125,3 +125,6 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+# Uploaded documents are stored locally and excluded from Git.
+MEDIA_ROOT = BASE_DIR / "uploads"
