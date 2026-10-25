@@ -128,3 +128,13 @@ MAILERS = {
 
 # Uploaded documents are stored locally and excluded from Git.
 MEDIA_ROOT = BASE_DIR / "uploads"
+
+# Upload request protection
+DATA_UPLOAD_MAX_MEMORY_SIZE = 11 * 1024 * 1024  # 11 MiB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024   # 2 MiB
+
+FILE_UPLOAD_HANDLERS = [
+    "documents.upload_handlers.LimitUploadSizeHandler",
+    "django.core.files.uploadhandler.MemoryFileUploadHandler",
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+]

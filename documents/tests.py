@@ -74,3 +74,74 @@ class UploadAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 413)
+
+    def test_rejects_fake_pdf(self):
+        fake_pdf = SimpleUploadedFile(
+            "fake.pdf",
+            b"This is not a real PDF file",
+            content_type="application/pdf",
+        )
+
+        response = self.client.post(
+            "/api/upload/",
+            {"file": fake_pdf},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejects_fake_png(self):
+        fake_png = SimpleUploadedFile(
+            "fake.png",
+            b"This is not a real PNG image",
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            "/api/upload/",
+            {"file": fake_png},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejects_fake_xlsx(self):
+        fake_xlsx = SimpleUploadedFile(
+            "fake.xlsx",
+            b"This is not a valid Excel workbook",
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+
+        response = self.client.post(
+            "/api/upload/",
+            {"file": fake_xlsx},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejects_binary_file_named_csv(self):
+        fake_csv = SimpleUploadedFile(
+            "fake.csv",
+            b"\xff\xfe\xfa\x00\x01",
+            content_type="text/csv",
+        )
+
+        response = self.client.post(
+            "/api/upload/",
+            {"file": fake_csv},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_rejects_request_without_csrf_token(self):
+        from django.test import Client
+
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        response = csrf_client.post(
+            "/api/upload/",
+            {},
+        )
+
+        self.assertEqual(response.status_code, 403)
