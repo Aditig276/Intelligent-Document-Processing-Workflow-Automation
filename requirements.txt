@@ -1,1 +1,7 @@
-PyMuPDF
+Django	 
+PyMuPDF	 
+pandas	 
+openpyxl	 
+xlrd	 
+Pillow	 
+pytest
