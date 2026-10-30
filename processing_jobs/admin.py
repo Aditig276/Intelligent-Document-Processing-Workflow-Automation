@@ -8,10 +8,11 @@ class ProcessingJobAdmin(admin.ModelAdmin):
         "id",
         "file_name",
         "file_type",
+        "owner",
         "status",
         "created_at",
     )
 
-    list_filter = ("status", "file_type")
-    search_fields = ("file_name",)
+    list_filter = ("status", "file_type", "owner")
+    search_fields = ("file_name", "owner__username")
     ordering = ("-created_at",)

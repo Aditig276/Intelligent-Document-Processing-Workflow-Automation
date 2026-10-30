@@ -235,3 +235,6 @@ db.sqlite3
 # Python virtual environments
 .venv/
 venv/
+
+# Static files
+staticfiles/

@@ -90,7 +90,6 @@ GAP = "ACCESS-GAP: access control is not wired into the views yet"
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(strict=True, reason=GAP + " (upload API accepts anonymous users)")
 def test_tc_ac_09_anonymous_user_cannot_use_upload_api(client):
     response = client.post(
         "/api/upload/", {"file": SimpleUploadedFile("a.csv", sf.csv_bytes())}
@@ -99,14 +98,12 @@ def test_tc_ac_09_anonymous_user_cannot_use_upload_api(client):
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(strict=True, reason=GAP + " (dashboard is public)")
 def test_tc_ac_10_anonymous_user_cannot_see_dashboard(client, require_url):
     response = client.get(require_url("processing_jobs:dashboard"))
     assert response.status_code in (302, 401, 403)
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(strict=True, reason=GAP + " (download endpoint is public)")
 def test_tc_ac_11_anonymous_user_cannot_download_results(client, require_url):
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
@@ -121,7 +118,6 @@ def test_tc_ac_11_anonymous_user_cannot_download_results(client, require_url):
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(strict=True, reason=GAP + " (ProcessingJob has no owner field)")
 def test_tc_ac_12_job_records_who_owns_them():
     from processing_jobs.models import ProcessingJob
 
@@ -129,7 +125,6 @@ def test_tc_ac_12_job_records_who_owns_them():
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(strict=True, reason=GAP + " (any user can open any job by id)")
 def test_tc_ac_13_user_cannot_open_another_users_job(client, django_user_model, require_url):
     from processing_jobs.models import ProcessingJob
 

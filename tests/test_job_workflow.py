@@ -5,6 +5,7 @@ Test IDs (TC-WF-xx) match docs/test-plan.md.
 import json
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -19,16 +20,38 @@ pytestmark = [pytest.mark.jobs, pytest.mark.django_db]
 
 
 # ------------------------------------------------------------ helpers
+@pytest.fixture(autouse=True)
+def workflow_auth_user(client, django_user_model):
+    """Authenticate client and provide a default owner for workflow tests."""
+    user = django_user_model.objects.create_user(
+        username="workflow_test_user", email="workflow@example.com", password="password123"
+    )
+    client.force_login(user)
+    return user
+
+
+def get_default_owner():
+    User = get_user_model()
+    user, _ = User.objects.get_or_create(
+        username="workflow_test_user",
+        defaults={"email": "workflow@example.com"}
+    )
+    return user
+
+
 def post_upload(client, url, name, content):
     return client.post(
         url, {"file": SimpleUploadedFile(name, content)}
     )
 
 
-def stored_job(name, content, status="pending"):
+def stored_job(name, content, status="pending", owner=None):
     """A job whose file is already saved in storage (as the upload view does)."""
+    if owner is None:
+        owner = get_default_owner()
     path = default_storage.save(f"uploads/{name}", ContentFile(content))
     return ProcessingJob.objects.create(
+        owner=owner,
         file_name=name,
         file_type=name.rsplit(".", 1)[-1].lower(),
         file_size=len(content),
@@ -149,8 +172,9 @@ def test_tc_wf_14_post_without_a_file_shows_an_error(client, upload_url):
 
 # ======================================================== dashboard
 def test_tc_wf_15_dashboard_lists_jobs_with_their_status(client, require_url):
-    ProcessingJob.objects.create(file_name="p.pdf", file_type="pdf")
-    ProcessingJob.objects.create(file_name="f.csv", file_type="csv", status="failed")
+    user = get_default_owner()
+    ProcessingJob.objects.create(owner=user, file_name="p.pdf", file_type="pdf")
+    ProcessingJob.objects.create(owner=user, file_name="f.csv", file_type="csv", status="failed")
     response = client.get(require_url("processing_jobs:dashboard"))
     assert response.status_code == 200
     html = response.content.decode()
@@ -159,8 +183,9 @@ def test_tc_wf_15_dashboard_lists_jobs_with_their_status(client, require_url):
 
 
 def test_tc_wf_16_dashboard_shows_at_most_100_jobs(client, require_url):
+    user = get_default_owner()
     ProcessingJob.objects.bulk_create(
-        [ProcessingJob(file_name=f"f{i}.csv", file_type="csv") for i in range(105)]
+        [ProcessingJob(owner=user, file_name=f"f{i}.csv", file_type="csv") for i in range(105)]
     )
     response = client.get(require_url("processing_jobs:dashboard"))
     assert len(response.context["jobs"]) == 100
@@ -185,7 +210,7 @@ def test_tc_wf_18_post_extract_completes_job_and_saves_result(client, require_ur
 
 def test_tc_wf_19_post_extract_on_corrupt_file_marks_job_failed(client, require_url):
     job = stored_job("broken.pdf", b"this is not a pdf")
-    response = client.post(require_url("processing_jobs:extract", job_id=job.id))
+    response = client.post(require_url("processing_jobs:extract", job_id=job.id), follow=True)
 
     assert response.status_code == 200
     assert b"Extraction failed" in response.content
@@ -204,8 +229,9 @@ def test_tc_wf_20_image_job_fails_with_clear_message_until_ocr_exists(client, re
 
 
 def test_tc_wf_21_missing_stored_file_marks_job_failed(client, require_url):
+    user = get_default_owner()
     job = ProcessingJob.objects.create(
-        file_name="gone.csv", file_type="csv", storage_reference="uploads/gone.csv"
+        owner=user, file_name="gone.csv", file_type="csv", storage_reference="uploads/gone.csv"
     )
     client.post(require_url("processing_jobs:extract", job_id=job.id))
     job.refresh_from_db()
@@ -275,12 +301,12 @@ def test_tc_wf_28_failed_job_page_shows_previous_error(client, require_url):
     assert b"Previous extraction failed: boom" in response.content
 
 
-def test_tc_wf_29_opening_the_job_page_moves_pending_to_processing(client, require_url):
-    """Characterisation test: current behaviour, see FINDING-03 in the test plan."""
+def test_tc_wf_29_opening_the_job_page_does_not_move_pending_to_processing(client, require_url):
+    """Verifies fix for FINDING-03: opening job page does not change pending to processing."""
     job = stored_job("a.csv", sf.csv_bytes())
     client.get(require_url("processing_jobs:extract", job_id=job.id))
     job.refresh_from_db()
-    assert job.status == "processing"
+    assert job.status == "pending"
 
 
 # ============================================== download endpoint

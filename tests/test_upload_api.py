@@ -16,11 +16,31 @@ UPLOAD_URL = "/api/upload/"
 HEALTH_URL = "/api/health/"
 
 
+def get_or_create_api_user():
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    user, _ = User.objects.get_or_create(
+        username="api_test_user",
+        defaults={"email": "api_test@example.com", "is_active": True},
+    )
+    return user
+
+
+@pytest.fixture(autouse=True)
+def authenticate_upload_client(client):
+    user = get_or_create_api_user()
+    client.force_login(user)
+    return client
+
+
 def upload(client, name, content, content_type="application/octet-stream"):
     return client.post(
         UPLOAD_URL,
         {"file": SimpleUploadedFile(name, content, content_type=content_type)},
     )
+
+
 
 
 # ---------------------------------------------------------------- health
@@ -265,12 +285,7 @@ def test_tc_up_23_disk_error_returns_500_and_leaves_no_partial_file(
     assert media_files() == []
 
 
-# ---------------------- KNOWN DEFECT (expected to fail until fixed) ----
-@pytest.mark.xfail(
-    strict=True,
-    reason="DEFECT-01: a ZIP that is not an Excel workbook raises KeyError "
-    "inside openpyxl, which views.py does not catch -> HTTP 500 instead of 400.",
-)
+# ---------------------- FIXED DEFECT ---------------------------------
 def test_tc_up_24_zip_renamed_to_xlsx_is_rejected_with_400(client):
     response = upload(client, "zip.xlsx", sf.zip_not_excel_bytes())
     assert response.status_code == 400
