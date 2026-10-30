@@ -2,7 +2,7 @@ import csv
 import io
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pandas as pd
 
 
@@ -55,7 +55,7 @@ def extract_csv(file_data):
 
 
 def extract_pdf(file_data):
-    document = fitz.open(
+    document = pymupdf.open(
         stream=file_data,
         filetype="pdf"
     )
