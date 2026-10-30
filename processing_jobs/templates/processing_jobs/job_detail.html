@@ -1,0 +1,328 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Job Details</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #0b1120;
+            color: #ffffff;
+            padding: 30px 18px;
+        }
+
+        .container {
+            max-width: 950px;
+            margin: auto;
+        }
+
+        .logo {
+            color: #38bdf8;
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: #151f32;
+            border: 1px solid #263650;
+            border-radius: 14px;
+            padding: 25px;
+            margin-bottom: 22px;
+        }
+
+        .card h2 {
+            font-size: 19px;
+            margin-bottom: 20px;
+        }
+
+        .details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 22px;
+        }
+
+        .label {
+            color: #94a3b8;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .value {
+            color: #e2e8f0;
+            font-weight: bold;
+            overflow-wrap: anywhere;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 7px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: capitalize;
+        }
+
+        .pending {
+            background: #422d12;
+            color: #facc15;
+        }
+
+        .processing {
+            background: #172554;
+            color: #60a5fa;
+        }
+
+        .completed {
+            background: #123b2a;
+            color: #86efac;
+        }
+
+        .failed {
+            background: #451a1a;
+            color: #fca5a5;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 18px;
+            border: none;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            background: #1d4ed8;
+        }
+
+        .secondary {
+            background: #334155;
+        }
+
+        .secondary:hover {
+            background: #475569;
+        }
+
+        .success {
+            background: #123b2a;
+            color: #86efac;
+            padding: 13px;
+            border-radius: 8px;
+            margin-bottom: 18px;
+        }
+
+        .error {
+            background: #451a1a;
+            color: #fca5a5;
+            padding: 13px;
+            border-radius: 8px;
+            margin-bottom: 18px;
+            overflow-wrap: anywhere;
+        }
+
+        .result {
+            background: #0b1120;
+            border: 1px solid #263650;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+        }
+
+        pre {
+            color: #86efac;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.6;
+            font-size: 13px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .back {
+            display: inline-block;
+            margin-bottom: 25px;
+            color: #38bdf8;
+            text-decoration: none;
+        }
+
+        .back:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 23px;
+            }
+
+            .card {
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="logo">INTELLIGENT DOCUMENT PROCESSING</div>
+
+    <a href="{% url 'dashboard' %}" class="back">
+        ← Back to Dashboard
+    </a>
+
+    <h1>Document Job Details</h1>
+
+    <p class="subtitle">
+        View document information and extraction results.
+    </p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="{% if 'error' in message.tags %}error{% else %}success{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card">
+
+        <h2>Document Information</h2>
+
+        <div class="details">
+
+            <div>
+                <div class="label">Job ID</div>
+                <div class="value">#{{ job.id }}</div>
+            </div>
+
+            <div>
+                <div class="label">File Name</div>
+                <div class="value">{{ job.file_name }}</div>
+            </div>
+
+            <div>
+                <div class="label">File Type</div>
+                <div class="value">{{ job.file_type|upper }}</div>
+            </div>
+
+            <div>
+                <div class="label">File Size</div>
+                <div class="value">{{ job.file_size|filesizeformat }}</div>
+            </div>
+
+            <div>
+                <div class="label">Status</div>
+                <div>
+                    <span class="status {{ job.status }}">
+                        {{ job.get_status_display }}
+                    </span>
+                </div>
+            </div>
+
+            <div>
+                <div class="label">Created At</div>
+                <div class="value">
+                    {{ job.created_at|date:"d M Y, H:i" }}
+                </div>
+            </div>
+
+        </div>
+
+        {% if job.status == "failed" and job.error_message %}
+            <div class="error" style="margin-top: 22px;">
+                Previous extraction failed: {{ job.error_message }}
+            </div>
+        {% endif %}
+
+        <div class="actions">
+
+            {% if job.status != "completed" %}
+
+                <form method="POST" action="{% url 'extract_job' job.id %}">
+                    {% csrf_token %}
+
+                    <button type="submit" class="button">
+                        {% if job.status == "failed" %}
+                            Retry Extraction
+                        {% else %}
+                            Process Document
+                        {% endif %}
+                    </button>
+                </form>
+
+            {% else %}
+
+                <a href="{% url 'download_result' job.id %}" class="button">
+                    Download JSON Result
+                </a>
+
+            {% endif %}
+
+            <a href="{% url 'dashboard' %}" class="button secondary">
+                Dashboard
+            </a>
+
+        </div>
+
+    </div>
+
+    {% if job.status == "completed" %}
+
+        <div class="card">
+
+            <h2>Extraction Results</h2>
+
+            {% if result %}
+
+                <div class="result">
+                    <pre>{{ result|pprint }}</pre>
+                </div>
+
+            {% elif result_error %}
+
+                <div class="error">
+                    {{ result_error }}
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+</body>
+</html>
+
