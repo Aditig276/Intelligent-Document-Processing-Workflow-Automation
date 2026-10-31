@@ -1,8 +1,17 @@
 
+from django.conf import settings
 from django.db import models
 
 
 class ProcessingJob(models.Model):
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="processing_jobs",
+        null=True,
+        blank=True,
+    )
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -11,7 +20,7 @@ class ProcessingJob(models.Model):
         FAILED = "failed", "Failed"
 
     file_name = models.CharField(max_length=255)
-    file_type = models.CharField(max_length=20)
+    file_type = models.CharField(max_length=50)
     file_size = models.PositiveBigIntegerField(default=0)
 
     storage_reference = models.CharField(

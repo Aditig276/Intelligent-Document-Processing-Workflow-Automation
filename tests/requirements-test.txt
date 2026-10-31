@@ -1,0 +1,9 @@
+# Extra packages needed to run the test suite (on top of requirements.txt)
+pytest
+pytest-django
+PyMuPDF
+Pillow
+openpyxl
+xlrd
+xlwt        # only used to build .xls sample files; xls tests skip without it
+pandas

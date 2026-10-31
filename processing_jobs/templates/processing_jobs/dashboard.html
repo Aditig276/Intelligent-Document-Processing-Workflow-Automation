@@ -3,130 +3,271 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="refresh" content="3">
-    <title>Processing Job Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Dashboard</title>
+
     <style>
-        body {
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
             font-family: Arial, sans-serif;
-            background: #f3f5f9;
-            padding: 30px 16px;
         }
+
+        body {
+            background: #0b1120;
+            color: #ffffff;
+            padding: 35px;
+        }
+
         .container {
-            max-width: 1200px;
+            max-width: 1150px;
             margin: auto;
-            background: white;
-            padding: 24px;
-            border-radius: 12px;
         }
-        .top {
+
+        .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 12px;
+            gap: 20px;
             flex-wrap: wrap;
+            margin-bottom: 35px;
         }
+
+        .logo {
+            color: #38bdf8;
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-size: 30px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+        }
+
+        .upload-btn {
+            background: #2563eb;
+            color: white;
+            padding: 13px 22px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .upload-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .card {
+            background: #151f32;
+            border: 1px solid #263650;
+            border-radius: 14px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .card h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
         }
+
         th, td {
-            padding: 12px;
+            padding: 16px 12px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #263650;
         }
+
+        th {
+            color: #94a3b8;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        td {
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
         .status {
             display: inline-block;
-            padding: 5px 10px;
-            border-radius: 14px;
-            background: #eee;
+            padding: 6px 11px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: capitalize;
         }
-        .pending { background: #fff0c2; }
-        .processing { background: #dceaff; }
-        .completed { background: #d8f5df; }
-        .failed { background: #ffe0e0; }
-        a.button {
-            display: inline-block;
-            padding: 10px 14px;
-            background: #2457d6;
-            color: white;
-            border-radius: 6px;
+
+        .pending {
+            background: #422d12;
+            color: #facc15;
+        }
+
+        .processing {
+            background: #172554;
+            color: #60a5fa;
+        }
+
+        .completed {
+            background: #123b2a;
+            color: #86efac;
+        }
+
+        .failed {
+            background: #451a1a;
+            color: #fca5a5;
+        }
+
+        .view-btn {
+            color: #38bdf8;
             text-decoration: none;
+            font-weight: bold;
         }
-        button {
-            background: #2457d6;
-            color: white;
-            border: 0;
-            border-radius: 6px;
-            padding: 12px 20px;
-            cursor: pointer;
+
+        .view-btn:hover {
+            text-decoration: underline;
         }
-        .muted { color: #666; }
+
+        .empty {
+            text-align: center;
+            color: #94a3b8;
+            padding: 40px 10px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 18px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
     </style>
 </head>
+
 <body>
+
 <div class="container">
-    <div class="top">
+
+    <div class="header">
+
         <div>
-            <h1>Processing Job Dashboard</h1>
-            <p class="muted">Status refreshes automatically every 3 seconds.</p>
+            <div class="logo">INTELLIGENT DOCUMENT PROCESSING</div>
+
+            <h1>Processing Dashboard</h1>
+
+            <p class="subtitle">
+                Monitor and manage your document processing jobs.
+            </p>
         </div>
-        <a class="button" href="{% url 'processing_jobs:upload' %}">
-            Upload Document
+
+        <a href="{% url 'upload_document' %}" class="upload-btn">
+            + Upload Document
         </a>
+
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>File Name</th>
-                <th>Type</th>
-                <th>Size (bytes)</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for job in jobs %}
-            <tr>
-                <td>{{ job.id }}</td>
-                <td>{{ job.file_name }}</td>
-                <td>{{ job.file_type }}</td>
-                <td>{{ job.file_size }}</td>
-                <td>
-                    <span class="status {{ job.status }}">
-                        {{ job.get_status_display }}
-                    </span>
-                </td>
-                <td>{{ job.created_at|date:"d M Y, H:i:s" }}</td>
-                
-<td>
-    {% if job.status == "pending" or job.status == "processing" %}
-        <a class ="button" href="{% url 'processing_jobs:view_extracted_data' job.id %}">
-            Process Data
-        </a>
-    {% elif job.status == "completed" %}
-        <a class ="button" href="{% url 'processing_jobs:view_extracted_data' job.id %}">
-            View Extracted Data
-        </a>
-    {% else %}
-        <a class ="button" href="{% url 'processing_jobs:view_extracted_data' job.id %}">
-            View Job
-        </a>
-    {% endif %}
-</td>
+    <div class="card">
 
-            </tr>
-        {% empty %}
-            <tr>
-                <td colspan="6">No processing jobs yet. Upload a document to begin.</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+        <h2>Recent Processing Jobs</h2>
+
+        {% if jobs %}
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>File Name</th>
+                        <th>File Type</th>
+                        <th>File Size</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for job in jobs %}
+
+                    <tr>
+
+                        <td>#{{ job.id }}</td>
+
+                        <td>{{ job.file_name }}</td>
+
+                        <td>{{ job.file_type|upper }}</td>
+
+                        <td>
+                            {{ job.file_size|filesizeformat }}
+                        </td>
+
+                        <td>
+                            <span class="status {{ job.status }}">
+                                {{ job.get_status_display }}
+                            </span>
+                        </td>
+
+                        <td>
+                            {{ job.created_at|date:"d M Y, H:i" }}
+                        </td>
+
+                        <td>
+                            <a
+                                href="{% url 'job_detail' job.id %}"
+                                class="view-btn"
+                            >
+                                View →
+                            </a>
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        {% else %}
+
+        <div class="empty">
+            <h3>No documents uploaded yet.</h3>
+
+            <p style="margin-top: 10px;">
+                Upload your first document to get started.
+            </p>
+        </div>
+
+        {% endif %}
+
+    </div>
+
 </div>
+
 </body>
 </html>
