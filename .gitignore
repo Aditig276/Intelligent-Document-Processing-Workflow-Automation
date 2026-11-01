@@ -238,3 +238,7 @@ venv/
 
 # Static files
 staticfiles/
+
+# Uploaded documents and test files
+uploads/
+config/invalid_test.pdf
