@@ -77,6 +77,9 @@ elif DEBUG or RUNNING_TESTS:
 else:
     ALLOWED_HOSTS = []
 
+if (DEBUG or RUNNING_TESTS) and "testserver" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
+
 
 # ------------------------------------------------------------------------------
 # Application Definition
@@ -108,7 +111,10 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [
+            BASE_DIR / "templates",
+            BASE_DIR / "processing_jobs" / "templates",
+        ],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -338,3 +344,12 @@ else:
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_HSTS_SECONDS = 0
+
+
+# ------------------------------------------------------------------------------
+# Authentication Redirects
+# ------------------------------------------------------------------------------
+
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "processing_jobs:dashboard"
+LOGOUT_REDIRECT_URL = "login"

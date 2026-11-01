@@ -180,9 +180,19 @@
             </p>
         </div>
 
-        <a href="{% url 'upload_document' %}" class="upload-btn">
-            + Upload Document
-        </a>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <a href="{% url 'processing_jobs:upload_document' %}" class="upload-btn">
+                + Upload Document
+            </a>
+            {% if request.user.is_authenticated %}
+            <form method="post" action="{% url 'logout' %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" style="background: #334155; color: white; padding: 13px 18px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    Logout ({{ request.user.username }})
+                </button>
+            </form>
+            {% endif %}
+        </div>
 
     </div>
 
@@ -236,7 +246,7 @@
 
                         <td>
                             <a
-                                href="{% url 'job_detail' job.id %}"
+                                href="{% url 'processing_jobs:job_detail' job.id %}"
                                 class="view-btn"
                             >
                                 View →

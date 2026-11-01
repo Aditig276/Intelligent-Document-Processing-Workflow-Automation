@@ -169,7 +169,7 @@ def upload_document(request):
         )
 
         messages.success(request, "Document uploaded successfully.")
-        return redirect("dashboard")
+        return redirect("processing_jobs:dashboard")
 
     return render(request, "processing_jobs/upload.html")
 
@@ -224,7 +224,7 @@ def extract_job(request, job_id):
             request.user.username,
         )
         messages.info(request, "This job has already been completed.")
-        return redirect("job_detail", job_id=job.id)
+        return redirect("processing_jobs:job_detail", job_id=job.id)
 
     job.status = ProcessingJob.Status.PROCESSING
     job.error_message = ""
@@ -274,7 +274,7 @@ def extract_job(request, job_id):
         safe_log(logger.error, "Job %s failed: %s", job.id, error)
         messages.error(request, f"Extraction failed: {error}")
 
-    return redirect("job_detail", job_id=job.id)
+    return redirect("processing_jobs:job_detail", job_id=job.id)
 
 
 @login_required

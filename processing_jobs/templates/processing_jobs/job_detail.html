@@ -197,7 +197,7 @@
 
     <div class="logo">INTELLIGENT DOCUMENT PROCESSING</div>
 
-    <a href="{% url 'dashboard' %}" class="back">
+    <a href="{% url 'processing_jobs:dashboard' %}" class="back">
         ← Back to Dashboard
     </a>
 
@@ -269,7 +269,7 @@
 
             {% if job.status != "completed" %}
 
-                <form method="POST" action="{% url 'extract_job' job.id %}">
+                <form method="POST" action="{% url 'processing_jobs:extract_job' job.id %}">
                     {% csrf_token %}
 
                     <button type="submit" class="button">
@@ -283,13 +283,13 @@
 
             {% else %}
 
-                <a href="{% url 'download_result' job.id %}" class="button">
+                <a href="{% url 'processing_jobs:download_result' job.id %}" class="button">
                     Download JSON Result
                 </a>
 
             {% endif %}
 
-            <a href="{% url 'dashboard' %}" class="button secondary">
+            <a href="{% url 'processing_jobs:dashboard' %}" class="button secondary">
                 Dashboard
             </a>
 
