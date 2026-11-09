@@ -1,5 +1,5 @@
 # Intelligent Document Processing Workflow Automation
-# Core Runtime Dependencies (verified against active Python virtual environment)
+# Core and Runtime Dependencies (verified against active Python virtual environment)
 
 Django==6.1.2
 asgiref==3.13.0
@@ -13,3 +13,6 @@ numpy==2.5.4
 python-dateutil==3.0.0
 tzdata==2026.6
 et_xmlfile==2.0.0
+pytest==9.2.0
+pytest-django==4.14.0
+httpx

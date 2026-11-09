@@ -92,7 +92,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
+    "documents",
     "processing_jobs",
 ]
 
@@ -107,7 +107,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
-
 
 TEMPLATES = [
     {
@@ -127,8 +126,8 @@ TEMPLATES = [
     },
 ]
 
-
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 
 # ------------------------------------------------------------------------------
@@ -214,6 +213,16 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 media_root_env = os.getenv("MEDIA_ROOT")
 MEDIA_ROOT = Path(media_root_env) if media_root_env else BASE_DIR / "media"
+
+# Upload request protection
+DATA_UPLOAD_MAX_MEMORY_SIZE = 11 * 1024 * 1024  # 11 MiB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024   # 2 MiB
+
+FILE_UPLOAD_HANDLERS = [
+    "documents.upload_handlers.LimitUploadSizeHandler",
+    "django.core.files.uploadhandler.MemoryFileUploadHandler",
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+]
 
 
 # ------------------------------------------------------------------------------
@@ -323,7 +332,6 @@ else:
 # Production Security & HTTPS Settings
 # ------------------------------------------------------------------------------
 
-# Whether to trust X-Forwarded-For header (only when behind a trusted reverse proxy)
 SECURE_TRUST_FORWARDED_FOR = get_bool_env("SECURE_TRUST_FORWARDED_FOR", False)
 
 if not DEBUG and not RUNNING_TESTS:

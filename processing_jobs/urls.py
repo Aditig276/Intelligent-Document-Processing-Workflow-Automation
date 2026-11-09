@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import api_views, views
+from . import views
 
 app_name = "processing_jobs"
 
@@ -23,8 +23,4 @@ urlpatterns = [
     # Result download
     path("job/<int:job_id>/download/", views.download_result, name="download_result"),
     path("jobs/<int:job_id>/download/", views.download_result, name="download_json"),
-
-    # API endpoints
-    path("api/health/", api_views.health_check, name="api_health"),
-    path("api/upload/", api_views.upload_file, name="api_upload"),
 ]

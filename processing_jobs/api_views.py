@@ -77,13 +77,17 @@ def upload_file(request):
         response["Retry-After"] = str(retry_after)
         return response
 
-    if "file" not in request.FILES:
+    uploaded_file = request.FILES.get("file")
+    if getattr(request, "upload_too_large", False):
+        logger.warning("Upload rejected: File exceeds the 10 MiB size limit.")
+        return JsonResponse(
+            {"error": "File exceeds the 10 MiB size limit."},
+            status=413,
+        )
 
+    if uploaded_file is None:
         logger.warning("Upload rejected: No file provided.")
         return JsonResponse({"error": "No file provided."}, status=400)
-
-
-    uploaded_file = request.FILES["file"]
 
     # Prevent directory traversal and normalize filename
     raw_name = uploaded_file.name or ""

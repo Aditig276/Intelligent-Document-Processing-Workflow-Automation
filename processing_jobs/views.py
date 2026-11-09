@@ -371,7 +371,7 @@ def job_detail(request, job_id):
 
         else:
             result_error = (
-                "Saved extraction result was not found."
+                "saved extraction result was not found."
             )
 
             safe_log(
