@@ -45,7 +45,7 @@ def get_bool_env(var_name: str, default: bool = False) -> bool:
 RUNNING_TESTS = (
     "pytest" in sys.modules
     or any("pytest" in arg for arg in sys.argv)
-    or any(cmd in sys.argv for cmd in ("test", "check", "makemigrations", "migrate"))
+    or any(cmd in sys.argv for cmd in ("test", "check", "makemigrations", "migrate", "showmigrations"))
 )
 
 # ------------------------------------------------------------------------------
@@ -93,6 +93,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
+    "documents",
     "processing_jobs",
 ]
 
@@ -107,7 +108,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
-
 
 TEMPLATES = [
     {
@@ -126,7 +126,6 @@ TEMPLATES = [
         },
     },
 ]
-
 
 WSGI_APPLICATION = "config.wsgi.application"
 
@@ -214,6 +213,16 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 media_root_env = os.getenv("MEDIA_ROOT")
 MEDIA_ROOT = Path(media_root_env) if media_root_env else BASE_DIR / "media"
+
+# Upload request protection
+DATA_UPLOAD_MAX_MEMORY_SIZE = 11 * 1024 * 1024  # 11 MiB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024   # 2 MiB
+
+FILE_UPLOAD_HANDLERS = [
+    "documents.upload_handlers.LimitUploadSizeHandler",
+    "django.core.files.uploadhandler.MemoryFileUploadHandler",
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+]
 
 
 # ------------------------------------------------------------------------------

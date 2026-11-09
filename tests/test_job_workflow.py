@@ -290,7 +290,7 @@ def test_tc_wf_26_completed_job_page_shows_saved_result(client, require_url):
 def test_tc_wf_27_completed_job_with_missing_result_file_shows_error(client, require_url):
     job = stored_job("a.csv", sf.csv_bytes(), status="completed")
     response = client.get(require_url("processing_jobs:extract", job_id=job.id))
-    assert b"saved extraction result was not found" in response.content
+    assert b"Saved extraction result was not found" in response.content
 
 
 def test_tc_wf_28_failed_job_page_shows_previous_error(client, require_url):

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Access Control and Authorization Module
 
 Project: Intelligent Document Processing & Workflow Automation

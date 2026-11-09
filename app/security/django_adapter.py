@@ -1,4 +1,4 @@
-﻿"""Django integration adapter for the owner-only Week 1 permission policy.
+"""Django integration adapter for the owner-only Week 1 permission policy.
 
 SECURITY CONTRACT:
 - Pass only `request.user` from Django's configured authentication middleware.

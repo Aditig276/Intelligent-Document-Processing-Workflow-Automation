@@ -213,6 +213,20 @@ def test_tc_up_17_file_one_byte_over_10_mib_is_rejected(client, media_files):
     assert media_files() == []
 
 
+def test_tc_up_17b_limit_upload_size_handler_rejection_returns_413(rf):
+    """Regression test: verify upload_too_large attribute triggers 413 before checking request.FILES."""
+    from processing_jobs import api_views
+
+    request = rf.post(UPLOAD_URL)
+    user = get_or_create_api_user()
+    request.user = user
+    request.upload_too_large = True
+
+    response = api_views.upload_file(request)
+    assert response.status_code == 413
+    assert "10" in response.content.decode("utf-8")
+
+
 # ------------------------------------- rejected: content != extension
 @pytest.mark.parametrize(
     "name,content,message",
