@@ -1,7 +1,7 @@
 # Week 1 — Django authorization integration handoff
 
-**Module:** Access Control & Authorization  
-**Member:** Brijesh (Member 4)  
+**Module:** Access Control & Authorization
+**Member:** Brijesh (Member 4)
 **PR:** #2 (`feature/access-control`)
 
 ## Implemented now
