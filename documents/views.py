@@ -298,12 +298,12 @@ def extract_file(request):
             {"error": str(exc)},
             status=400,
         )
-
     except Exception:
         logger.exception("Document extraction failed")
         return JsonResponse(
             {"error": "Document extraction failed."},
             status=500,
+        )
  
 
 def extraction_review(request):
@@ -358,4 +358,4 @@ def extraction_review(request):
             "errors": errors,
             "message": message,
         }
-    ) main
+    ) 
