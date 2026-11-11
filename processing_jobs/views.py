@@ -266,6 +266,7 @@ def extract_job(request, job_id):
 
         result = extract_document(file_data, job.file_name)
 
+
         result_dir = Path(settings.MEDIA_ROOT) / "extracted"
         result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -276,6 +277,7 @@ def extract_job(request, job_id):
             encoding="utf-8",
         )
 
+        job.extracted_data = result
         job.status = ProcessingJob.Status.COMPLETED
         job.error_message = ""
         job.save()
@@ -452,6 +454,8 @@ def download_result(request, job_id):
                         file_data,
                         job.file_name,
                     )
+
+                    job.extracted_data = result
 
                     result_dir = (
                         Path(settings.MEDIA_ROOT) / "extracted"
