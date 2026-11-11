@@ -219,9 +219,24 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-
+# Environment variables
+.env
 .env.*
 !.env.example
 
 # Uploaded documents and generated files
+media/
 uploads/
+
+# Local database
+db.sqlite3
+
+# Python virtual environments
+.venv/
+venv/
+
+# Static files
+staticfiles/
+
+# Uploaded documents and test files
+config/invalid_test.pdf

@@ -1,8 +1,9 @@
 import tempfile
 from pathlib import Path
 
-from django.test import TestCase, override_settings
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 
 
 class UploadAPITests(TestCase):
@@ -13,6 +14,15 @@ class UploadAPITests(TestCase):
         )
         self.settings_override.enable()
         self.upload_url = "/api/upload/"
+
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="doc_test_user",
+            email="doc_test@example.com",
+            password="testpassword123",
+            is_active=True,
+        )
+        self.client.force_login(self.user)
 
     def tearDown(self):
         self.settings_override.disable()
@@ -138,6 +148,7 @@ class UploadAPITests(TestCase):
         from django.test import Client
 
         csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.user)
 
         response = csrf_client.post(
             "/api/upload/",
