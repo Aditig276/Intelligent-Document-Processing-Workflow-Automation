@@ -1,0 +1,215 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Processing | Upload</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #0b1120;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 650px;
+            background: #151f32;
+            padding: 40px;
+            border-radius: 18px;
+            border: 1px solid #263650;
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.3);
+        }
+
+        .logo {
+            color: #38bdf8;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            font-size: 30px;
+            margin-bottom: 12px;
+        }
+
+        .description {
+            color: #94a3b8;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .upload-box {
+            border: 2px dashed #3b82f6;
+            border-radius: 14px;
+            padding: 40px 20px;
+            text-align: center;
+            background: #101a2b;
+        }
+
+        .upload-icon {
+            font-size: 45px;
+            margin-bottom: 15px;
+        }
+
+        input[type="file"] {
+            display: block;
+            width: 100%;
+            margin-top: 20px;
+            color: #cbd5e1;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        input[type="file"]::file-selector-button {
+            background: #1e293b;
+            color: #38bdf8;
+            border: 1px solid #38bdf8;
+            padding: 12px 22px;
+            margin-right: 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 25px;
+            padding: 15px;
+            border: none;
+            border-radius: 9px;
+            background: #2563eb;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .error {
+            background: #451a1a;
+            color: #fca5a5;
+            padding: 13px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #123b2a;
+            color: #86efac;
+            padding: 13px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .formats {
+            color: #94a3b8;
+            font-size: 13px;
+            margin-top: 20px;
+            line-height: 1.7;
+        }
+
+        .dashboard-link {
+            display: block;
+            text-align: center;
+            margin-top: 25px;
+            color: #38bdf8;
+            text-decoration: none;
+        }
+
+        .dashboard-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <div class="logo">INTELLIGENT DOCUMENT PROCESSING</div>
+
+        <h1>Upload Your Document</h1>
+
+        <p class="description">
+            Upload your documents and let our automated processing
+            system extract and organize the information.
+        </p>
+
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="success">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="upload-box">
+
+                <div class="upload-icon">📄</div>
+
+                <h3>Select Your Document</h3>
+
+                <p class="description">
+                    Choose a file from your device to begin.
+                </p>
+
+                <input
+                    type="file"
+                    name="file"
+                    accept=".pdf,.csv,.xlsx,.xls,.png,.jpg,.jpeg"
+                    required
+                >
+
+            </div>
+
+            <button type="submit">
+                Upload Document
+            </button>
+
+        </form>
+
+        <div class="formats">
+            Supported formats: PDF, CSV, XLSX, XLS, PNG, JPG and JPEG.
+            <br>
+            Maximum file size: 10 MB.
+        </div>
+
+        <a href="{% url 'processing_jobs:dashboard' %}" class="dashboard-link">
+            View Processing Dashboard →
+        </a>
+
+    </div>
+
+</body>
+</html>
