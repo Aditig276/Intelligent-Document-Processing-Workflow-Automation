@@ -11,6 +11,9 @@ import csv
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.shortcuts import render
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
@@ -205,4 +208,60 @@ def upload_file(request):
             "sha256": checksum.hexdigest(),
         },
         status=201,
+    )
+
+
+
+def extraction_review(request):
+    extracted_data = {
+        "document_name": "sample_invoice.pdf",
+        "invoice_number": "INV-001",
+        "document_date": "2026-11-11",
+        "customer_name": "ABC Technologies",
+        "total_amount": "15000",
+    }
+
+    errors = {}
+    message = ""
+
+    if request.method == "POST":
+        for field in extracted_data:
+            extracted_data[field] = request.POST.get(field, "").strip()
+
+        # Check required fields
+        for field, value in extracted_data.items():
+            if not value:
+                errors[field] = "This field is required."
+
+        # Validate date
+        if extracted_data["document_date"]:
+            try:
+                datetime.strptime(
+                    extracted_data["document_date"], "%Y-%m-%d"
+                )
+            except ValueError:
+                errors["document_date"] = "Enter date in YYYY-MM-DD format."
+
+        # Validate amount
+        if extracted_data["total_amount"]:
+            try:
+                amount = Decimal(extracted_data["total_amount"])
+                if not amount.is_finite() or amount < 0:
+                    raise InvalidOperation
+            except (InvalidOperation, ValueError):
+                errors["total_amount"] = "Enter a valid non-negative amount."
+
+        if errors:
+            message = "Please correct the highlighted fields."
+        else:
+            message = "Changes submitted successfully!"
+
+    return render(
+        request,
+        "documents/extraction_review.html",
+        {
+            "extracted_data": extracted_data,
+            "errors": errors,
+            "message": message,
+        }
     )
