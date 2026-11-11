@@ -29,6 +29,11 @@ class ProcessingJob(models.Model):
         default="",
     )
 
+    reviewed_data = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

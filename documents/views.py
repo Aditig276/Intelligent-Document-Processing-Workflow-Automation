@@ -19,6 +19,8 @@ from django.shortcuts import render
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
+from processing_jobs.models import ProcessingJob
+
 from app.extractors.extraction_service import extract_document_text
 from app.extractors.pdf_extractor import PDFExtractionError
 from app.extractors.ocr_extractor import OCRExtractionError
@@ -306,56 +308,150 @@ def extract_file(request):
         )
  
 
+
+
 def extraction_review(request):
     extracted_data = {
-        "document_name": "sample_invoice.pdf",
-        "invoice_number": "INV-001",
-        "document_date": "2026-11-11",
-        "customer_name": "ABC Technologies",
-        "total_amount": "15000",
+        "document_name": "",
+        "invoice_number": "",
+        "document_date": "",
+        "customer_name": "",
+        "total_amount": "",
     }
 
+    extracted_text = ""
     errors = {}
     message = ""
+    job_id = ""
 
     if request.method == "POST":
-        for field in extracted_data:
-            extracted_data[field] = request.POST.get(field, "").strip()
 
-        # Check required fields
-        for field, value in extracted_data.items():
-            if not value:
-                errors[field] = "This field is required."
+        uploaded_file = request.FILES.get("file")
 
-        # Validate date
-        if extracted_data["document_date"]:
+        # Upload and extract document
+        if uploaded_file:
+            original_name = Path(uploaded_file.name).name
+            extension = Path(original_name).suffix.lower()
+
+            if extension not in {".pdf", ".png", ".jpg", ".jpeg"}:
+                errors["document"] = "Unsupported file format."
+
+            elif uploaded_file.size == 0:
+                errors["document"] = "Empty files are not allowed."
+
+            elif uploaded_file.size > MAX_FILE_SIZE:
+                errors["document"] = "File exceeds the 10 MB size limit."
+
+            else:
+                stored_filename = f"{uuid.uuid4().hex}{extension}"
+                upload_dir = Path(settings.MEDIA_ROOT)
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                file_path = upload_dir / stored_filename
+
+                try:
+                    with file_path.open("xb") as output:
+                        for chunk in uploaded_file.chunks():
+                            output.write(chunk)
+
+                    result = extract_document_text(str(file_path))
+                    extracted_text = result.get("full_text", "")
+
+                    job = ProcessingJob.objects.create(
+                        owner=request.user if request.user.is_authenticated else None,
+                        file_name=original_name,
+                        file_type=extension.lstrip("."),
+                        file_size=uploaded_file.size,
+                        storage_reference=stored_filename,
+                        status=ProcessingJob.Status.COMPLETED,
+                    )
+
+                    job_id = str(job.id)
+                    extracted_data["document_name"] = original_name
+                    message = "Document extracted successfully."
+
+                except Exception:
+                    logger.exception("Document extraction failed")
+                    file_path.unlink(missing_ok=True)
+                    errors["document"] = "Document extraction failed."
+
+        # Save reviewed fields
+        elif request.POST.get("job_id"):
             try:
-                datetime.strptime(
-                    extracted_data["document_date"], "%Y-%m-%d"
+                job = ProcessingJob.objects.get(
+                    id=request.POST.get("job_id")
                 )
-            except ValueError:
-                errors["document_date"] = "Enter date in YYYY-MM-DD format."
 
-        # Validate amount
-        if extracted_data["total_amount"]:
-            try:
-                amount = Decimal(extracted_data["total_amount"])
-                if not amount.is_finite() or amount < 0:
-                    raise InvalidOperation
-            except (InvalidOperation, ValueError):
-                errors["total_amount"] = "Enter a valid non-negative amount."
+                if job.owner_id and job.owner_id != request.user.id:
+                    errors["document"] = "You cannot access this document."
+                else:
+                    file_path = Path(settings.MEDIA_ROOT) / Path(
+                        job.storage_reference
+                    ).name
 
-        if errors:
-            message = "Please correct the highlighted fields."
-        else:
-            message = "Changes submitted successfully!"
+                    if not file_path.is_file():
+                        errors["document"] = "Uploaded document not found."
+                    else:
+                        result = extract_document_text(str(file_path))
+                        extracted_text = result.get("full_text", "")
+                        job_id = str(job.id)
+
+                        for field in extracted_data:
+                            extracted_data[field] = request.POST.get(
+                                field, ""
+                            ).strip()
+
+                        for field, value in extracted_data.items():
+                            if not value:
+                                errors[field] = "This field is required."
+
+                        if extracted_data["document_date"]:
+                            try:
+                                datetime.strptime(
+                                    extracted_data["document_date"],
+                                    "%Y-%m-%d"
+                                )
+                            except ValueError:
+                                errors["document_date"] = (
+                                    "Enter date in YYYY-MM-DD format."
+                                )
+
+                        if extracted_data["total_amount"]:
+                            try:
+                                amount = Decimal(
+                                    extracted_data["total_amount"]
+                                )
+                                if not amount.is_finite() or amount < 0:
+                                    raise InvalidOperation
+                            except (InvalidOperation, ValueError):
+                                errors["total_amount"] = (
+                                    "Enter a valid non-negative amount."
+                                )
+
+                        if errors:
+                            message = "Please correct the highlighted fields."
+                        else:
+                            job.reviewed_data = extracted_data
+                            job.save(update_fields=[
+                                "reviewed_data",
+                                "updated_at",
+                            ])
+                            message = "Reviewed data saved successfully."
+
+            except ProcessingJob.DoesNotExist:
+                errors["document"] = "Processing job not found."
+
+            except Exception:
+                logger.exception("Review saving failed")
+                errors["document"] = "Unable to save reviewed data."
 
     return render(
         request,
         "documents/extraction_review.html",
         {
+            "job_id": job_id,
             "extracted_data": extracted_data,
+            "extracted_text": extracted_text,
             "errors": errors,
             "message": message,
-        }
-    ) 
+        },
+    )
