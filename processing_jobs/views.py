@@ -177,6 +177,7 @@ def upload_document(request):
     return render(request, "processing_jobs/upload.html")
 
 
+
 @login_required
 @require_GET
 def dashboard(request):
@@ -186,12 +187,55 @@ def dashboard(request):
         request.user.username,
     )
 
-    jobs = ProcessingJob.objects.filter(owner=request.user)[:100]
+    # Get all jobs belonging to the logged-in user
+    all_jobs = ProcessingJob.objects.filter(owner=request.user)
+
+    # Calculate dashboard counts
+    total_jobs = all_jobs.count()
+    completed_jobs = all_jobs.filter(
+        status=ProcessingJob.Status.COMPLETED
+    ).count()
+    pending_jobs = all_jobs.filter(
+        status=ProcessingJob.Status.PENDING
+    ).count()
+    processing_count = all_jobs.filter(
+        status=ProcessingJob.Status.PROCESSING
+    ).count()
+    failed_jobs = all_jobs.filter(
+        status=ProcessingJob.Status.FAILED
+    ).count()
+
+    # Read search and status filters
+    search = request.GET.get("search", "").strip()
+    status_filter = request.GET.get("status", "").strip().lower()
+
+    # Apply filters
+    jobs = all_jobs
+
+    if search:
+        jobs = jobs.filter(file_name__icontains=search)
+
+    valid_statuses = [status.value for status in ProcessingJob.Status]
+
+    if status_filter in valid_statuses:
+        jobs = jobs.filter(status=status_filter)
+
+    # Prepare context
+    context = {
+        "jobs": jobs.order_by("-created_at")[:100],
+        "total_jobs": total_jobs,
+        "completed_jobs": completed_jobs,
+        "pending_jobs": pending_jobs,
+        "processing_jobs": processing_count,
+        "failed_jobs": failed_jobs,
+        "search": search,
+        "status_filter": status_filter,
+    }
 
     return render(
         request,
         "processing_jobs/dashboard.html",
-        {"jobs": jobs},
+        context,
     )
 
 
