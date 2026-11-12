@@ -213,12 +213,61 @@ def dashboard(request):
         request.user.username,
     )
 
-    jobs = filter_user_processing_history(request.user)[:100]
+    # Get only jobs the logged-in user is authorized to access.
+    all_jobs = filter_user_processing_history(request.user)
+
+    # Calculate dashboard counts using authorized jobs only.
+    total_jobs = all_jobs.count()
+
+    completed_jobs = all_jobs.filter(
+        status=ProcessingJob.Status.COMPLETED
+    ).count()
+
+    pending_jobs = all_jobs.filter(
+        status=ProcessingJob.Status.PENDING
+    ).count()
+
+    processing_count = all_jobs.filter(
+        status=ProcessingJob.Status.PROCESSING
+    ).count()
+
+    failed_jobs = all_jobs.filter(
+        status=ProcessingJob.Status.FAILED
+    ).count()
+
+    # Read search and status filters.
+    search = request.GET.get("search", "").strip()
+    status_filter = request.GET.get("status", "").strip().lower()
+
+    # Apply filters only to authorized jobs.
+    jobs = all_jobs
+
+    if search:
+        jobs = jobs.filter(file_name__icontains=search)
+
+    valid_statuses = [
+        status.value for status in ProcessingJob.Status
+    ]
+
+    if status_filter in valid_statuses:
+        jobs = jobs.filter(status=status_filter)
+
+    # Prepare dashboard context.
+    context = {
+        "jobs": jobs.order_by("-created_at")[:100],
+        "total_jobs": total_jobs,
+        "completed_jobs": completed_jobs,
+        "pending_jobs": pending_jobs,
+        "processing_jobs": processing_count,
+        "failed_jobs": failed_jobs,
+        "search": search,
+        "status_filter": status_filter,
+    }
 
     return render(
         request,
         "processing_jobs/dashboard.html",
-        {"jobs": jobs},
+        context,
     )
 
 
@@ -594,7 +643,6 @@ view_extracted_data = job_detail
 download_extraction_json = download_result
 
 
-
 @login_required
 @require_GET
 def download_document(request, job_id):
@@ -649,6 +697,7 @@ def download_report(request, job_id, report_type):
         raise Http404("Report not found.")
 
     canonical = normalize_report_type(report_type)
+
     if canonical is None:
         safe_log(
             logger.warning,
@@ -659,7 +708,10 @@ def download_report(request, job_id, report_type):
         raise Http404("Report not found.")
 
     try:
-        file_path, download_filename, content_type = resolve_report_for_job(job, canonical)
+        file_path, download_filename, content_type = resolve_report_for_job(
+            job,
+            canonical,
+        )
     except ValueError:
         raise Http404("Report not found.")
 
@@ -688,5 +740,6 @@ def download_report(request, job_id, report_type):
 
 
 # Additional aliases for views
+
 download_source_document = download_document
 download_report_alias = download_report
