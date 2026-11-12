@@ -9,16 +9,50 @@
 </head>
 <body>
 
-    <div class="container">
+<div class="container">
 
-        <h2>Review Extracted Document Data</h2>
+    <h2>Review Extracted Document Data</h2>
 
-        {% if message %}
-            <p class="message">{{ message }}</p>
-        {% endif %}
+    {% if message %}
+        <p class="message">{{ message }}</p>
+    {% endif %}
 
+    {% if errors.document %}
+        <p class="error">{{ errors.document }}</p>
+    {% endif %}
+
+    <!-- Upload document -->
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <label>Select PDF or Image:</label>
+
+        <input type="file"
+               name="file"
+               accept=".pdf,.png,.jpg,.jpeg"
+               required>
+
+        <button type="submit">Upload and Extract</button>
+    </form>
+
+    <!-- Display extracted text -->
+    {% if extracted_text %}
+        <div class="extracted-content">
+            <h3>Extracted Document Text</h3>
+            <pre>{{ extracted_text }}</pre>
+        </div>
+    {% endif %}
+
+    <!-- Review and save extracted fields -->
+    {% if job_id %}
         <form method="post">
             {% csrf_token %}
+
+            <input type="hidden"
+                   name="job_id"
+                   value="{{ job_id }}">
+
+            <h3>Editable Extracted Fields</h3>
 
             {% for field, value in extracted_data.items %}
                 <div class="form-group">
@@ -39,10 +73,10 @@
             {% endfor %}
 
             <button type="submit">Save Changes</button>
-
         </form>
+    {% endif %}
 
-    </div>
+</div>
 
 </body>
 </html>
