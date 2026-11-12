@@ -1,7 +1,9 @@
 
+import csv
 import json
 import logging
 from pathlib import Path
+import zipfile
 
 from django.conf import settings
 from django.contrib import messages
@@ -15,13 +17,38 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
 from app.security.django_adapter import (
+    can_django_user_access_document,
+    can_django_user_access_history,
     can_django_user_access_job,
+    can_django_user_download_report,
     can_django_user_upload,
+    filter_user_processing_history,
+    get_authorized_job_or_404,
 )
 
 from .extractors import extract_document
 from .models import ProcessingJob
+from .reports import normalize_report_type, resolve_report_for_job
+from .security import (
+    InvalidMediaPathError,
+    get_validated_extracted_result_path,
+    serve_secure_file,
+    validate_media_path,
+)
 from .services import check_rate_limit, ingest_document
+
+
+EXTRACTION_EXCEPTIONS = (
+    OSError,
+    ValueError,
+    RuntimeError,
+    UnicodeError,
+    LookupError,
+    EOFError,
+    csv.Error,
+    zipfile.BadZipFile,
+    json.JSONDecodeError,
+)
 
 
 logger = logging.getLogger("processing_jobs")
@@ -186,7 +213,7 @@ def dashboard(request):
         request.user.username,
     )
 
-    jobs = ProcessingJob.objects.filter(owner=request.user)[:100]
+    jobs = filter_user_processing_history(request.user)[:100]
 
     return render(
         request,
@@ -252,24 +279,21 @@ def extract_job(request, job_id):
     )
 
     try:
-        file_path = Path(job.storage_reference)
-
-        if not file_path.is_absolute():
-            file_path = Path(settings.MEDIA_ROOT) / file_path
-
-        if not file_path.exists():
-            raise FileNotFoundError(
-                "Stored document was not found."
-            )
+        file_path = validate_media_path(
+            job.storage_reference,
+            must_exist=True,
+            expect_file=True,
+        )
 
         file_data = file_path.read_bytes()
 
         result = extract_document(file_data, job.file_name)
 
-        result_dir = Path(settings.MEDIA_ROOT) / "extracted"
-        result_dir.mkdir(parents=True, exist_ok=True)
-
-        result_path = result_dir / f"job_{job.id}.json"
+        result_path = get_validated_extracted_result_path(
+            job.id,
+            must_exist=False,
+            create_dir=True,
+        )
 
         result_path.write_text(
             json.dumps(result, indent=4, default=str),
@@ -344,21 +368,28 @@ def job_detail(request, job_id):
     result_error = None
 
     if job.status == ProcessingJob.Status.COMPLETED:
+        try:
+            result_path = get_validated_extracted_result_path(
+                job.id,
+                must_exist=True,
+            )
+        except InvalidMediaPathError:
+            result_error = (
+                "Saved extraction result was not found."
+            )
 
-        result_path = (
-            Path(settings.MEDIA_ROOT)
-            / "extracted"
-            / f"job_{job.id}.json"
-        )
-
-        if result_path.exists():
-
+            safe_log(
+                logger.error,
+                "Extraction result file missing or invalid for completed job %s.",
+                job.id,
+            )
+        else:
             try:
                 result = json.loads(
                     result_path.read_text(encoding="utf-8")
                 )
 
-            except (OSError, json.JSONDecodeError):
+            except (OSError, UnicodeError, json.JSONDecodeError):
                 result_error = (
                     "Could not read the saved extraction result."
                 )
@@ -368,17 +399,6 @@ def job_detail(request, job_id):
                     "Failed to decode extraction result for job %s.",
                     job.id,
                 )
-
-        else:
-            result_error = (
-                "Saved extraction result was not found."
-            )
-
-            safe_log(
-                logger.error,
-                "Extraction result file missing for completed job %s.",
-                job.id,
-            )
 
     safe_log(
         logger.debug,
@@ -423,12 +443,6 @@ def download_result(request, job_id):
         )
         raise Http404("Extraction result was not found.")
 
-    result_path = (
-        Path(settings.MEDIA_ROOT)
-        / "extracted"
-        / f"job_{job.id}.json"
-    )
-
     if job.status != ProcessingJob.Status.COMPLETED:
 
         extracted = False
@@ -437,57 +451,75 @@ def download_result(request, job_id):
             job.storage_reference
             and job.status == ProcessingJob.Status.PENDING
         ):
+            try:
+                file_path = validate_media_path(
+                    job.storage_reference,
+                    must_exist=True,
+                    expect_file=True,
+                )
+            except InvalidMediaPathError as exc:
+                safe_log(
+                    auth_logger.warning,
+                    "Rejected invalid source document path for job %s: %s",
+                    job.id,
+                    exc,
+                )
+                raise Http404(
+                    "Extraction result is not available."
+                )
 
-            file_path = Path(job.storage_reference)
+            try:
+                target_result_path = get_validated_extracted_result_path(
+                    job.id,
+                    must_exist=False,
+                    create_dir=True,
+                )
+            except InvalidMediaPathError as exc:
+                safe_log(
+                    auth_logger.warning,
+                    "Rejected invalid extracted result path for job %s: %s",
+                    job.id,
+                    exc,
+                )
+                raise Http404(
+                    "Extraction result is not available."
+                )
 
-            if not file_path.is_absolute():
-                file_path = Path(settings.MEDIA_ROOT) / file_path
+            try:
+                file_data = file_path.read_bytes()
 
-            if file_path.exists():
+                result = extract_document(
+                    file_data,
+                    job.file_name,
+                )
 
-                try:
-                    file_data = file_path.read_bytes()
+                serialized = json.dumps(result, indent=4, default=str)
 
-                    result = extract_document(
-                        file_data,
-                        job.file_name,
-                    )
+                target_result_path.write_text(
+                    serialized,
+                    encoding="utf-8",
+                )
+            except EXTRACTION_EXCEPTIONS as error:
+                job.status = ProcessingJob.Status.FAILED
+                job.error_message = str(error)[:2000]
+                job.save()
 
-                    result_dir = (
-                        Path(settings.MEDIA_ROOT) / "extracted"
-                    )
+                safe_log(
+                    logger.error,
+                    "On-demand extraction failed during download for job %s: %s",
+                    job.id,
+                    error,
+                )
 
-                    result_dir.mkdir(
-                        parents=True,
-                        exist_ok=True,
-                    )
+                raise Http404(
+                    "Extraction result is not available."
+                )
 
-                    result_path.write_text(
-                        json.dumps(result, indent=4, default=str),
-                        encoding="utf-8",
-                    )
+            job.status = ProcessingJob.Status.COMPLETED
+            job.error_message = ""
+            job.save()
 
-                    job.status = ProcessingJob.Status.COMPLETED
-                    job.error_message = ""
-                    job.save()
-
-                    extracted = True
-
-                except Exception as error:
-                    job.status = ProcessingJob.Status.FAILED
-                    job.error_message = str(error)[:2000]
-                    job.save()
-
-                    safe_log(
-                        logger.error,
-                        "On-demand extraction failed during download for job %s: %s",
-                        job.id,
-                        error,
-                    )
-
-                    raise Http404(
-                        "Extraction result is not available."
-                    )
+            extracted = True
 
         if not extracted:
             safe_log(
@@ -502,10 +534,15 @@ def download_result(request, job_id):
                 "Extraction result is not available."
             )
 
-    if not result_path.exists():
+    try:
+        result_path = get_validated_extracted_result_path(
+            job.id,
+            must_exist=True,
+        )
+    except InvalidMediaPathError:
         safe_log(
             logger.error,
-            "Download failed for job %s: result file not found. User=%s",
+            "Download failed for job %s: result file not found or invalid. User=%s",
             job.id,
             request.user.username,
         )
@@ -518,7 +555,7 @@ def download_result(request, job_id):
         content = result_path.read_text(encoding="utf-8")
         json.loads(content)
 
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         safe_log(
             logger.error,
             "Download failed for job %s: result file is unreadable. User=%s",
@@ -555,3 +592,101 @@ def download_result(request, job_id):
 job_dashboard = dashboard
 view_extracted_data = job_detail
 download_extraction_json = download_result
+
+
+
+@login_required
+@require_GET
+def download_document(request, job_id):
+    """Download the original uploaded source document for an owned processing job."""
+    job = get_authorized_job_or_404(request.user, job_id)
+
+    if not can_django_user_access_document(request.user, job):
+        safe_log(
+            auth_logger.warning,
+            "Unauthorized source document download attempt: User '%s' requested job %s.",
+            request.user.username,
+            job_id,
+        )
+        raise Http404("Document was not found.")
+
+    if not job.storage_reference:
+        safe_log(
+            logger.warning,
+            "Source document missing storage reference for job %s.",
+            job.id,
+        )
+        raise Http404("Document was not found.")
+
+    safe_log(
+        logger.info,
+        "Source document download initiated: job_id=%s, file_name=%s, user=%s",
+        job.id,
+        job.file_name,
+        request.user.username,
+    )
+
+    return serve_secure_file(
+        file_path=job.storage_reference,
+        download_filename=job.file_name,
+    )
+
+
+@login_required
+@require_GET
+def download_report(request, job_id, report_type):
+    """Download a generated Excel or PDF report for an owned processing job."""
+    job = get_authorized_job_or_404(request.user, job_id)
+
+    if not can_django_user_download_report(request.user, job):
+        safe_log(
+            auth_logger.warning,
+            "Unauthorized report download attempt: User '%s' requested job %s report '%s'.",
+            request.user.username,
+            job_id,
+            report_type,
+        )
+        raise Http404("Report not found.")
+
+    canonical = normalize_report_type(report_type)
+    if canonical is None:
+        safe_log(
+            logger.warning,
+            "Invalid report type '%s' requested for job %s.",
+            report_type,
+            job_id,
+        )
+        raise Http404("Report not found.")
+
+    try:
+        file_path, download_filename, content_type = resolve_report_for_job(job, canonical)
+    except ValueError:
+        raise Http404("Report not found.")
+
+    if file_path is None:
+        safe_log(
+            logger.info,
+            "Report of type '%s' for job %s has not been generated or file is missing.",
+            canonical,
+            job.id,
+        )
+        raise Http404("Report has not been generated yet.")
+
+    safe_log(
+        logger.info,
+        "Report download initiated: job_id=%s, type=%s, user=%s",
+        job.id,
+        canonical,
+        request.user.username,
+    )
+
+    return serve_secure_file(
+        file_path=file_path,
+        download_filename=download_filename,
+        content_type=content_type,
+    )
+
+
+# Additional aliases for views
+download_source_document = download_document
+download_report_alias = download_report

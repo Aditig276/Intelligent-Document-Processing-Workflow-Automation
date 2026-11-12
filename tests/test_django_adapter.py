@@ -7,7 +7,10 @@ import pytest
 
 from app.security.django_adapter import (
     actor_from_django_user,
+    can_django_user_access_document,
+    can_django_user_access_history,
     can_django_user_access_job,
+    can_django_user_download_report,
     can_django_user_upload,
 )
 
@@ -71,3 +74,54 @@ def test_missing_owner_field_is_denied():
 def test_adapter_creates_expected_actor_from_verified_context():
     actor = actor_from_django_user(user(pk=101))
     assert actor is not None and actor.user_id == "101" and actor.is_active
+
+
+@pytest.mark.parametrize(
+    "django_user,processing_job,expected",
+    [
+        (user(101), job(owner_id=101), True),
+        (user(102), job(owner_id=101), False),
+        (user(101, authenticated=False), job(owner_id=101), False),
+        (user(101, active=False), job(owner_id=101), False),
+        (None, job(owner_id=101), False),
+        (user(101), None, False),
+        (user(101), job(owner_id=None), False),
+        (user(101), job(pk=None), False),
+    ],
+)
+def test_document_access_permissions(django_user, processing_job, expected):
+    assert can_django_user_access_document(django_user, processing_job) is expected
+
+
+@pytest.mark.parametrize(
+    "django_user,processing_job,expected",
+    [
+        (user(101), job(owner_id=101), True),
+        (user(102), job(owner_id=101), False),
+        (user(101, authenticated=False), job(owner_id=101), False),
+        (user(101, active=False), job(owner_id=101), False),
+        (None, job(owner_id=101), False),
+        (user(101), None, False),
+        (user(101), job(owner_id=None), False),
+        (user(101), job(pk=None), False),
+    ],
+)
+def test_report_download_permissions(django_user, processing_job, expected):
+    assert can_django_user_download_report(django_user, processing_job) is expected
+
+
+@pytest.mark.parametrize(
+    "django_user,processing_job,expected",
+    [
+        (user(101), job(owner_id=101), True),
+        (user(102), job(owner_id=101), False),
+        (user(101, authenticated=False), job(owner_id=101), False),
+        (user(101, active=False), job(owner_id=101), False),
+        (None, job(owner_id=101), False),
+        (user(101), None, False),
+        (user(101), job(owner_id=None), False),
+        (user(101), job(pk=None), False),
+    ],
+)
+def test_history_access_permissions(django_user, processing_job, expected):
+    assert can_django_user_access_history(django_user, processing_job) is expected
