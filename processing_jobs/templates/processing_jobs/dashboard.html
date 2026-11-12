@@ -81,6 +81,30 @@
             background: #475569;
         }
 
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 18px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: #151f32;
+            border: 1px solid #263650;
+            border-radius: 12px;
+            padding: 22px;
+        }
+
+        .stat-card p {
+            color: #94a3b8;
+            margin-bottom: 12px;
+        }
+
+        .stat-card h2 {
+            font-size: 28px;
+            color: #38bdf8;
+        }
+
         .card {
             background: #151f32;
             border: 1px solid #263650;
@@ -92,6 +116,48 @@
         .card h2 {
             font-size: 20px;
             margin-bottom: 20px;
+        }
+
+        .filter-form {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 22px;
+        }
+
+        .filter-form input,
+        .filter-form select {
+            padding: 11px 14px;
+            background: #0b1120;
+            color: white;
+            border: 1px solid #334155;
+            border-radius: 7px;
+            font-size: 14px;
+        }
+
+        .filter-form input {
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .filter-form button {
+            padding: 11px 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .filter-form button:hover {
+            background: #1d4ed8;
+        }
+
+        .clear-btn {
+            color: #38bdf8;
+            text-decoration: none;
+            padding: 11px;
         }
 
         table {
@@ -189,28 +255,26 @@
 
 <div class="container">
 
+    <!-- Header -->
     <div class="header">
 
         <div>
             <div class="logo">INTELLIGENT DOCUMENT PROCESSING</div>
-
             <h1>Processing Dashboard</h1>
-
             <p class="subtitle">
                 Monitor and manage your document processing jobs.
             </p>
         </div>
 
-        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
 
             <a href="{% url 'processing_jobs:upload_document' %}" class="upload-btn">
                 + Upload Document
             </a>
 
             {% if request.user.is_authenticated %}
-                <form method="post" action="{% url 'logout' %}" style="display: inline;">
+                <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
-
                     <button type="submit" class="logout-btn">
                         Logout ({{ request.user.username }})
                     </button>
@@ -218,17 +282,90 @@
             {% endif %}
 
         </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="stats">
+
+        <div class="stat-card">
+            <p>Total Documents</p>
+            <h2>{{ total_jobs }}</h2>
+        </div>
+
+        <div class="stat-card">
+            <p>Completed</p>
+            <h2>{{ completed_jobs }}</h2>
+        </div>
+
+        <div class="stat-card">
+            <p>Pending</p>
+            <h2>{{ pending_jobs }}</h2>
+        </div>
+
+        <div class="stat-card">
+            <p>Processing</p>
+            <h2>{{ processing_jobs }}</h2>
+        </div>
+
+        <div class="stat-card">
+            <p>Failed</p>
+            <h2>{{ failed_jobs }}</h2>
+        </div>
 
     </div>
 
+    <!-- Processing History -->
     <div class="card">
 
-        <h2>Recent Processing Jobs</h2>
+        <h2>Processing History</h2>
+
+        <!-- Search and Status Filter -->
+        <form method="GET"
+              action="{% url 'processing_jobs:dashboard' %}"
+              class="filter-form">
+
+            <input
+                type="text"
+                name="search"
+                placeholder="Search by file name..."
+                value="{{ search }}"
+            >
+
+            <select name="status">
+
+                <option value="" {% if not status_filter %}selected{% endif %}>
+                    All Statuses
+                </option>
+
+                <option value="pending" {% if status_filter == "pending" %}selected{% endif %}>
+                    Pending
+                </option>
+
+                <option value="processing" {% if status_filter == "processing" %}selected{% endif %}>
+                    Processing
+                </option>
+
+                <option value="completed" {% if status_filter == "completed" %}selected{% endif %}>
+                    Completed
+                </option>
+
+                <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>
+                    Failed
+                </option>
+
+            </select>
+
+            <button type="submit">Apply Filters</button>
+
+            <a href="{% url 'processing_jobs:dashboard' %}" class="clear-btn">
+                Clear
+            </a>
+
+        </form>
 
         {% if jobs %}
 
         <div class="table-wrapper">
-
             <table>
 
                 <thead>
@@ -244,23 +381,16 @@
                 </thead>
 
                 <tbody>
-
                     {% for job in jobs %}
-
                     <tr>
 
                         <td>#{{ job.id }}</td>
-
                         <td>{{ job.file_name }}</td>
-
                         <td>{{ job.file_type|upper }}</td>
+                        <td>{{ job.file_size|filesizeformat }}</td>
 
                         <td>
-                            {{ job.file_size|filesizeformat }}
-                        </td>
-
-                        <td>
-                            <span class="status {{ job.status }}">
+                            <span class="status {{ job.status|lower }}">
                                 {{ job.get_status_display }}
                             </span>
                         </td>
@@ -270,31 +400,25 @@
                         </td>
 
                         <td>
-                            <a
-                                href="{% url 'processing_jobs:job_detail' job.id %}"
-                                class="view-btn"
-                            >
+                            <a href="{% url 'processing_jobs:job_detail' job.id %}"
+                               class="view-btn">
                                 View →
                             </a>
                         </td>
 
                     </tr>
-
                     {% endfor %}
-
                 </tbody>
 
             </table>
-
         </div>
 
         {% else %}
 
         <div class="empty">
-            <h3>No documents uploaded yet.</h3>
-
-            <p style="margin-top: 10px;">
-                Upload your first document to get started.
+            <h3>No matching documents found.</h3>
+            <p style="margin-top:10px;">
+                Try changing your search or filters.
             </p>
         </div>
 
