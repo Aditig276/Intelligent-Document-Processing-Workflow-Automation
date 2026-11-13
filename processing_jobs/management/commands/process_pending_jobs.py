@@ -1,9 +1,7 @@
 import json
 import logging
-from pathlib import Path
 import time
 
-from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import (
     DatabaseError,
@@ -15,6 +13,11 @@ from django.db import (
 
 from processing_jobs.extractors import extract_document
 from processing_jobs.models import ProcessingJob
+from processing_jobs.security import (
+    InvalidMediaPathError,
+    get_validated_extracted_result_path,
+    validate_media_path,
+)
 
 logger = logging.getLogger("processing_jobs")
 
@@ -63,17 +66,33 @@ def claim_next_job():
         return None
 
 
+def _mark_job_failed(job, error, stderr=None, *, is_security_rejection=False):
+    """Persist FAILED status and log/emit failure details for a claimed job."""
+    job.status = ProcessingJob.Status.FAILED
+    job.error_message = str(error)[:2000]
+    job.save(update_fields=["status", "error_message", "updated_at"])
+
+    try:
+        if is_security_rejection:
+            logger.warning("Job %s rejected invalid media path: %s", job.id, error)
+        else:
+            logger.error("Job %s failed: %s", job.id, error)
+    except Exception:
+        pass
+
+    if stderr:
+        stderr.write(f"Failed job {job.id}: {error}")
+
+
 def process_claimed_job(job, stdout=None, stderr=None):
     """Execute document extraction and result storage for a claimed job."""
     try:
-        # Resolve stored file path
-        file_path = Path(job.storage_reference)
-
-        if not file_path.is_absolute():
-            file_path = Path(settings.MEDIA_ROOT) / file_path
-
-        if not file_path.exists():
-            raise FileNotFoundError("Stored document was not found.")
+        # Validate and resolve stored file path within MEDIA_ROOT
+        file_path = validate_media_path(
+            job.storage_reference,
+            must_exist=True,
+            expect_file=True,
+        )
 
         # Read document
         file_data = file_path.read_bytes()
@@ -82,11 +101,12 @@ def process_claimed_job(job, stdout=None, stderr=None):
         result = extract_document(file_data, job.file_name)
         job.extracted_data = result
 
-        # Save extraction result
-        result_dir = Path(settings.MEDIA_ROOT) / "extracted"
-        result_dir.mkdir(parents=True, exist_ok=True)
-
-        result_path = result_dir / f"job_{job.id}.json"
+        # Validate extracted result path within MEDIA_ROOT before writing
+        result_path = get_validated_extracted_result_path(
+            job.id,
+            must_exist=False,
+            create_dir=True,
+        )
 
         result_path.write_text(
             json.dumps(result, indent=4, default=str),
@@ -112,20 +132,12 @@ def process_claimed_job(job, stdout=None, stderr=None):
 
         return True
 
+    except InvalidMediaPathError as error:
+        _mark_job_failed(job, error, stderr=stderr, is_security_rejection=True)
+        return False
+
     except Exception as error:
-        # Mark failed jobs and continue processing
-        job.status = ProcessingJob.Status.FAILED
-        job.error_message = str(error)[:2000]
-        job.save(update_fields=["status", "error_message", "updated_at"])
-
-        try:
-            logger.error("Job %s failed: %s", job.id, error)
-        except Exception:
-            pass
-
-        if stderr:
-            stderr.write(f"Failed job {job.id}: {error}")
-
+        _mark_job_failed(job, error, stderr=stderr)
         return False
 
 

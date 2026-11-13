@@ -6,10 +6,20 @@ from pathlib import Path
 import uuid
 
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.views.decorators.http import require_http_methods, require_POST
 
+from app.security.django_adapter import (
+    can_django_user_access_document,
+    can_django_user_access_history,
+    can_django_user_download_report,
+    filter_user_processing_history,
+    get_authorized_job_or_404,
+)
 from .api_auth import authenticate_api_request
+from .models import ProcessingJob
+from .reports import normalize_report_type, resolve_report_for_job
+from .security import serve_secure_file
 from .services import check_rate_limit, ingest_document
 
 
@@ -277,3 +287,180 @@ def upload_file(request):
         },
         status=201,
     )
+
+
+
+@require_http_methods(["GET"])
+def processing_history_api(request):
+    """Processing history API: GET /api/jobs/ or /api/history/.
+
+    Returns the authenticated user's processing history with optional status/file_type
+    filtering and pagination. Multi-tenant isolated: never returns another user's jobs.
+    """
+    user, auth_error = authenticate_api_request(request)
+    if auth_error is not None:
+        return auth_error
+
+    queryset = filter_user_processing_history(user)
+
+    # Filtering by status
+    status_filter = request.GET.get("status")
+    if status_filter:
+        normalized_status = status_filter.strip().lower()
+        if normalized_status in ProcessingJob.Status.values:
+            queryset = queryset.filter(status=normalized_status)
+
+    # Filtering by file type
+    file_type_filter = request.GET.get("file_type")
+    if file_type_filter:
+        clean_ext = file_type_filter.strip().lower().lstrip(".")
+        queryset = queryset.filter(file_type=clean_ext)
+
+    # Pagination
+    total = queryset.count()
+    try:
+        page = max(1, int(request.GET.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+
+    try:
+        page_size = min(100, max(1, int(request.GET.get("page_size", 20))))
+    except (ValueError, TypeError):
+        page_size = 20
+
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_jobs = queryset[start:end]
+
+    results = []
+    for job in page_jobs:
+        results.append({
+            "id": job.id,
+            "file_name": job.file_name,
+            "file_type": job.file_type,
+            "file_size": job.file_size,
+            "status": job.status,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            "document_url": f"/job/{job.id}/document/",
+            "result_url": f"/job/{job.id}/download/" if job.status == ProcessingJob.Status.COMPLETED else None,
+            "reports": {
+                "excel": f"/job/{job.id}/report/excel/",
+                "pdf": f"/job/{job.id}/report/pdf/",
+            } if job.status == ProcessingJob.Status.COMPLETED else None,
+        })
+
+    return JsonResponse({
+        "count": total,
+        "page": page,
+        "page_size": page_size,
+        "results": results,
+    })
+
+
+@require_http_methods(["GET"])
+def job_detail_api(request, job_id):
+    """Processing job detail API: GET /api/jobs/<job_id>/.
+
+    Multi-tenant isolated: returns 404 if the job does not exist or belongs to another user.
+    """
+    user, auth_error = authenticate_api_request(request)
+    if auth_error is not None:
+        return auth_error
+
+    try:
+        job = get_authorized_job_or_404(user, job_id)
+    except Http404:
+        return JsonResponse({"error": "Job not found."}, status=404)
+
+    if not can_django_user_access_history(user, job):
+        return JsonResponse({"error": "Job not found."}, status=404)
+
+    data = {
+        "id": job.id,
+        "file_name": job.file_name,
+        "file_type": job.file_type,
+        "file_size": job.file_size,
+        "status": job.status,
+        "error_message": job.error_message if job.status == ProcessingJob.Status.FAILED else "",
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+        "document_url": f"/job/{job.id}/document/",
+        "result_url": f"/job/{job.id}/download/" if job.status == ProcessingJob.Status.COMPLETED else None,
+        "reports": {
+            "excel": f"/job/{job.id}/report/excel/",
+            "pdf": f"/job/{job.id}/report/pdf/",
+        } if job.status == ProcessingJob.Status.COMPLETED else None,
+    }
+    return JsonResponse(data)
+
+
+@require_http_methods(["GET"])
+def download_document_api(request, job_id):
+    """Source document download API: GET /api/jobs/<job_id>/document/.
+
+    Multi-tenant isolated and path-traversal protected.
+    """
+    user, auth_error = authenticate_api_request(request)
+    if auth_error is not None:
+        return auth_error
+
+    try:
+        job = get_authorized_job_or_404(user, job_id)
+    except Http404:
+        return JsonResponse({"error": "Document not found."}, status=404)
+
+    if not can_django_user_access_document(user, job):
+        return JsonResponse({"error": "Document not found."}, status=404)
+
+    if not job.storage_reference:
+        return JsonResponse({"error": "Document not found."}, status=404)
+
+    try:
+        return serve_secure_file(
+            file_path=job.storage_reference,
+            download_filename=job.file_name,
+        )
+    except Http404:
+        return JsonResponse({"error": "Document not found."}, status=404)
+
+
+@require_http_methods(["GET"])
+def download_report_api(request, job_id, report_type):
+    """Report download API: GET /api/jobs/<job_id>/report/<report_type>/.
+
+    Supports report_type in ('excel', 'pdf', 'xlsx').
+    Multi-tenant isolated and path-traversal protected.
+    """
+    user, auth_error = authenticate_api_request(request)
+    if auth_error is not None:
+        return auth_error
+
+    try:
+        job = get_authorized_job_or_404(user, job_id)
+    except Http404:
+        return JsonResponse({"error": "Report not found."}, status=404)
+
+    if not can_django_user_download_report(user, job):
+        return JsonResponse({"error": "Report not found."}, status=404)
+
+    canonical = normalize_report_type(report_type)
+    if canonical is None:
+        return JsonResponse({"error": f"Invalid report type '{report_type}'."}, status=400)
+
+    try:
+        file_path, download_filename, content_type = resolve_report_for_job(job, canonical)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    if file_path is None:
+        return JsonResponse({"error": "Report has not been generated yet."}, status=404)
+
+    try:
+        return serve_secure_file(
+            file_path=file_path,
+            download_filename=download_filename,
+            content_type=content_type,
+        )
+    except Http404:
+        return JsonResponse({"error": "Report not found."}, status=404)
