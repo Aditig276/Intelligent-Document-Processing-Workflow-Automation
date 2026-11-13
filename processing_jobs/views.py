@@ -339,17 +339,18 @@ def extract_job(request, job_id):
 
         result = extract_document(file_data, job.file_name)
 
-        result_path = get_validated_extracted_result_path(
-            job.id,
-            must_exist=False,
-            create_dir=True,
-        )
+result_path = get_validated_extracted_result_path(
+    job.id,
+    must_exist=False,
+    create_dir=True,
+)
 
         result_path.write_text(
             json.dumps(result, indent=4, default=str),
             encoding="utf-8",
         )
 
+        job.extracted_data = result
         job.status = ProcessingJob.Status.COMPLETED
         job.error_message = ""
         job.save()
@@ -535,36 +536,42 @@ def download_result(request, job_id):
                     "Extraction result is not available."
                 )
 
-            try:
-                file_data = file_path.read_bytes()
+try:
+    file_data = file_path.read_bytes()
 
-                result = extract_document(
-                    file_data,
-                    job.file_name,
-                )
+    result = extract_document(
+        file_data,
+        job.file_name,
+    )
 
-                serialized = json.dumps(result, indent=4, default=str)
+    job.extracted_data = result
 
-                target_result_path.write_text(
-                    serialized,
-                    encoding="utf-8",
-                )
-            except EXTRACTION_EXCEPTIONS as error:
-                job.status = ProcessingJob.Status.FAILED
-                job.error_message = str(error)[:2000]
-                job.save()
+    serialized = json.dumps(
+        result,
+        indent=4,
+        default=str,
+    )
 
-                safe_log(
-                    logger.error,
-                    "On-demand extraction failed during download for job %s: %s",
-                    job.id,
-                    error,
-                )
+    target_result_path.write_text(
+        serialized,
+        encoding="utf-8",
+    )
 
-                raise Http404(
-                    "Extraction result is not available."
-                )
+except EXTRACTION_EXCEPTIONS as error:
+    job.status = ProcessingJob.Status.FAILED
+    job.error_message = str(error)[:2000]
+    job.save()
 
+    safe_log(
+        logger.error,
+        "On-demand extraction failed during download for job %s: %s",
+        job.id,
+        error,
+    )
+
+    raise Http404(
+        "Extraction result is not available."
+    )
             job.status = ProcessingJob.Status.COMPLETED
             job.error_message = ""
             job.save()
