@@ -287,6 +287,20 @@
                     Download JSON Result
                 </a>
 
+                <a href="{% url 'processing_jobs:download_report' job.id 'excel' %}" class="button">
+                    Download Excel Report
+                </a>
+
+                <a href="{% url 'processing_jobs:download_report' job.id 'pdf' %}" class="button">
+                    Download PDF Summary
+                </a>
+
+            {% endif %}
+
+            {% if job.storage_reference %}
+                <a href="{% url 'processing_jobs:download_document' job.id %}" class="button secondary">
+                    Download Source Document
+                </a>
             {% endif %}
 
             <a href="{% url 'processing_jobs:dashboard' %}" class="button secondary">
