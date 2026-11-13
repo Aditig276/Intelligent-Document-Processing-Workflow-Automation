@@ -1,8 +1,8 @@
-
+from django.utils import timezone
+from app.report_generators.excel_generator import generate_excel_report
 import json
 import logging
 from pathlib import Path
-
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -555,3 +555,50 @@ def download_result(request, job_id):
 job_dashboard = dashboard
 view_extracted_data = job_detail
 download_extraction_json = download_result
+
+@login_required
+def download_excel_report(request, job_id):
+    try:
+        job = ProcessingJob.objects.get(id=job_id)
+
+    except ProcessingJob.DoesNotExist:
+        raise Http404("Processing job was not found.")
+
+    # Verify job access
+    if not can_django_user_access_job(request.user, job):
+        raise Http404("Processing job was not found.")
+
+    # Ensure reviewed data is available
+    if not isinstance(job.reviewed_data, dict) or not job.reviewed_data:
+        raise Http404("Reviewed data is not available for this report.")
+
+    try:
+        excel_file = generate_excel_report(
+            reviewed_data=job.reviewed_data,
+            job_id=job.id,
+            original_file_name=job.file_name,
+            processing_status=job.status,
+            created_at=job.created_at,
+            generated_at=timezone.now(),
+        )
+
+        response = HttpResponse(
+            excel_file.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+
+        response["Content-Disposition"] = (
+            f'attachment; filename="job_{job.id}_report.xlsx"'
+        )
+
+        return response
+
+    except Exception:
+        logger.exception(
+            "Excel report generation failed for job %s",
+            job.id,
+        )
+        raise Http404("Unable to generate the Excel report.")

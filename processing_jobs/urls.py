@@ -23,6 +23,7 @@ urlpatterns = [
     # Result download
     path("job/<int:job_id>/download/", views.download_result, name="download_result"),
     path("jobs/<int:job_id>/download/", views.download_result, name="download_json"),
+    path("job/<int:job_id>/download/excel/",views.download_excel_report,name="download_excel_report",),
 
     # API endpoints
     path("api/health/", api_views.health_check, name="api_health"),
