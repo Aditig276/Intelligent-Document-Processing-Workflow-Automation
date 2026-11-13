@@ -32,6 +32,7 @@ from .reports import normalize_report_type, resolve_report_for_job
 from .security import (
     InvalidMediaPathError,
     get_validated_extracted_result_path,
+    sanitize_error_message,
     serve_secure_file,
     validate_media_path,
 )
@@ -112,6 +113,19 @@ def upload_document(request):
             return response
 
         uploaded_file = request.FILES.get("file")
+
+        # Check if file upload was rejected early by LimitUploadSizeHandler
+        if getattr(request, "upload_too_large", False):
+            safe_log(
+                logger.warning,
+                "Browser upload rejected: File exceeds the 10 MB size limit. User=%s",
+                request.user.username,
+            )
+            return render(
+                request,
+                "processing_jobs/upload.html",
+                {"error": "File size must not exceed 10 MB."},
+            )
 
         if not uploaded_file:
             safe_log(
@@ -367,7 +381,8 @@ def extract_job(request, job_id):
 
     except Exception as error:
         job.status = ProcessingJob.Status.FAILED
-        job.error_message = str(error)[:2000]
+        clean_msg = sanitize_error_message(error)
+        job.error_message = clean_msg[:2000]
         job.save()
 
         safe_log(
@@ -375,11 +390,12 @@ def extract_job(request, job_id):
             "Job %s failed: %s",
             job.id,
             error,
+            exc_info=True,
         )
 
         messages.error(
             request,
-            f"Extraction failed: {error}"
+            f"Extraction failed: {clean_msg}"
         )
 
     return redirect(
@@ -548,9 +564,9 @@ def download_result(request, job_id):
                     serialized,
                     encoding="utf-8",
                 )
-            except EXTRACTION_EXCEPTIONS as error:
+            except Exception as error:
                 job.status = ProcessingJob.Status.FAILED
-                job.error_message = str(error)[:2000]
+                job.error_message = "Document extraction failed. Please verify the file and try again."
                 job.save()
 
                 safe_log(
@@ -558,6 +574,7 @@ def download_result(request, job_id):
                     "On-demand extraction failed during download for job %s: %s",
                     job.id,
                     error,
+                    exc_info=True,
                 )
 
                 raise Http404(
@@ -632,6 +649,7 @@ def download_result(request, job_id):
     response["Content-Disposition"] = (
         f'attachment; filename="job_{job.id}_extraction.json"'
     )
+    response["X-Content-Type-Options"] = "nosniff"
 
     return response
 
