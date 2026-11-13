@@ -4,9 +4,16 @@ import pymupdf
 import pytesseract
 from PIL import Image, UnidentifiedImageError
 
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-)
+import shutil
+
+windows_tesseract = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+
+if windows_tesseract.exists():
+    pytesseract.pytesseract.tesseract_cmd = str(windows_tesseract)
+else:
+    linux_tesseract = shutil.which("tesseract")
+    if linux_tesseract:
+        pytesseract.pytesseract.tesseract_cmd = linux_tesseract
 
 class OCRExtractionError(Exception):
     """Raised when OCR extraction fails."""
