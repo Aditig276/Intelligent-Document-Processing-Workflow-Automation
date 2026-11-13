@@ -1,0 +1,4 @@
+invoice_number,customer_name,total_amount,document_date
+INV-1001,ABC Technologies,15000.50,2026-11-12
+INV-1002,XYZ Solutions,8500.00,2026-11-13
+INV-1003,Global Systems,12000.75,2026-11-14

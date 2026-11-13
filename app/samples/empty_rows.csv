@@ -1,0 +1,6 @@
+invoice_number,customer_name,total_amount
+INV-3001,Alpha Ltd,2500.00
+
+INV-3002,Beta Ltd,3500.00
+,
+INV-3003,Gamma Ltd,4500.00
