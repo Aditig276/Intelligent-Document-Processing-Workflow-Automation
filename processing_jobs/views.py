@@ -1,10 +1,11 @@
-
 import csv
 import json
 import logging
 from pathlib import Path
 import zipfile
 
+from django.utils import timezone
+from app.report_generators.excel_generator import generate_excel_report
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -642,37 +643,61 @@ job_dashboard = dashboard
 view_extracted_data = job_detail
 download_extraction_json = download_result
 
+@login_required
+def download_excel_report(request, job_id):
+    try:
+        job = ProcessingJob.objects.get(id=job_id)
+    except ProcessingJob.DoesNotExist:
+        raise Http404("Processing job was not found.")
+
+    if not can_django_user_access_job(request.user, job):
+        raise Http404("Processing job was not found.")
+
+    if not isinstance(job.reviewed_data, dict) or not job.reviewed_data:
+        raise Http404("Reviewed data is not available for this report.")
+
+    try:
+        excel_file = generate_excel_report(
+            reviewed_data=job.reviewed_data,
+            job_id=job.id,
+            original_file_name=job.file_name,
+            processing_status=job.status,
+            created_at=job.created_at,
+            generated_at=timezone.now(),
+        )
+
+        response = HttpResponse(
+            excel_file.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+
+        response["Content-Disposition"] = (
+            f'attachment; filename="job_{job.id}_report.xlsx"'
+        )
+        return response
+
+    except Exception:
+        logger.exception(
+            "Excel report generation failed for job %s",
+            job.id,
+        )
+        raise Http404("Unable to generate the Excel report.")
+
 
 @login_required
 @require_GET
 def download_document(request, job_id):
-    """Download the original uploaded source document for an owned processing job."""
+    """Download the original uploaded source document."""
     job = get_authorized_job_or_404(request.user, job_id)
 
     if not can_django_user_access_document(request.user, job):
-        safe_log(
-            auth_logger.warning,
-            "Unauthorized source document download attempt: User '%s' requested job %s.",
-            request.user.username,
-            job_id,
-        )
         raise Http404("Document was not found.")
 
     if not job.storage_reference:
-        safe_log(
-            logger.warning,
-            "Source document missing storage reference for job %s.",
-            job.id,
-        )
         raise Http404("Document was not found.")
-
-    safe_log(
-        logger.info,
-        "Source document download initiated: job_id=%s, file_name=%s, user=%s",
-        job.id,
-        job.file_name,
-        request.user.username,
-    )
 
     return serve_secure_file(
         file_path=job.storage_reference,
@@ -683,54 +708,26 @@ def download_document(request, job_id):
 @login_required
 @require_GET
 def download_report(request, job_id, report_type):
-    """Download a generated Excel or PDF report for an owned processing job."""
+    """Download a generated Excel or PDF report."""
     job = get_authorized_job_or_404(request.user, job_id)
 
     if not can_django_user_download_report(request.user, job):
-        safe_log(
-            auth_logger.warning,
-            "Unauthorized report download attempt: User '%s' requested job %s report '%s'.",
-            request.user.username,
-            job_id,
-            report_type,
-        )
         raise Http404("Report not found.")
 
     canonical = normalize_report_type(report_type)
 
     if canonical is None:
-        safe_log(
-            logger.warning,
-            "Invalid report type '%s' requested for job %s.",
-            report_type,
-            job_id,
-        )
         raise Http404("Report not found.")
 
     try:
         file_path, download_filename, content_type = resolve_report_for_job(
-            job,
-            canonical,
+            job, canonical
         )
     except ValueError:
         raise Http404("Report not found.")
 
     if file_path is None:
-        safe_log(
-            logger.info,
-            "Report of type '%s' for job %s has not been generated or file is missing.",
-            canonical,
-            job.id,
-        )
         raise Http404("Report has not been generated yet.")
-
-    safe_log(
-        logger.info,
-        "Report download initiated: job_id=%s, type=%s, user=%s",
-        job.id,
-        canonical,
-        request.user.username,
-    )
 
     return serve_secure_file(
         file_path=file_path,
@@ -738,8 +735,6 @@ def download_report(request, job_id, report_type):
         content_type=content_type,
     )
 
-
-# Additional aliases for views
 
 download_source_document = download_document
 download_report_alias = download_report
