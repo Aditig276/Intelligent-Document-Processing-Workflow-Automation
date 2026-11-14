@@ -34,6 +34,12 @@ class ProcessingJob(models.Model):
         blank=True,
     )
 
+    extracted_data = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+    )
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

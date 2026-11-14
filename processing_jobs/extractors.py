@@ -10,13 +10,33 @@ def extract_document(file_data, file_name):
     extension = Path(file_name).suffix.lower()
 
     if extension == ".csv":
-        return extract_csv(file_data)
+        import tempfile
+        from app.extractors.tabular_extractor import extract_tabular_data
+
+        with tempfile.NamedTemporaryFile(
+            suffix=extension,
+            delete=False
+        ) as temp_file:
+            temp_file.write(file_data)
+            temp_path = Path(temp_file.name)
+
+        try:
+            result = extract_tabular_data(temp_path)
+
+            return {
+                "file_type": "csv",
+                "columns": result["columns"],
+                "row_count": result["row_count"],
+                "data": result["rows"],
+            }
+        finally:
+            temp_path.unlink(missing_ok=True)
 
     if extension == ".pdf":
         return extract_pdf(file_data)
 
     if extension in [".xlsx", ".xls"]:
-        return extract_excel(file_data)
+        return extract_excel(file_data, extension=extension)
 
     raise ValueError(f"Unsupported file type: {extension}")
 
@@ -82,86 +102,44 @@ def extract_pdf(file_data):
 
 
 def extract_excel(file_data, extension=None):
-    excel_file = pd.ExcelFile(io.BytesIO(file_data))
+    import tempfile
 
-    result = {}
+    from app.extractors.tabular_extractor import extract_tabular_data
 
-    for sheet_name in excel_file.sheet_names:
-        dataframe = pd.read_excel(
-            excel_file,
-            sheet_name=sheet_name,
-            header=None
-        )
+    extension = extension or ".xlsx"
 
-        # Remove completely empty rows and columns.
-        dataframe = dataframe.dropna(
-            axis=0,
-            how="all"
-        )
+    with tempfile.NamedTemporaryFile(
+        suffix=extension,
+        delete=False
+    ) as temp_file:
+        temp_file.write(file_data)
+        temp_path = Path(temp_file.name)
 
-        dataframe = dataframe.dropna(
-            axis=1,
-            how="all"
-        )
+    try:
+        engine = "openpyxl" if extension == ".xlsx" else "xlrd"
 
-        if dataframe.empty:
-            result[sheet_name] = {
-                "columns": [],
-                "row_count": 0,
-                "data": [],
-            }
-            continue
+        with pd.ExcelFile(temp_path, engine=engine) as excel_file:
+            sheet_names = excel_file.sheet_names
 
-        # Detect the first row containing actual column headings.
-        header_index = None
+        result = {}
 
-        for index, row in dataframe.iterrows():
-            non_empty_values = row.dropna()
-
-            if len(non_empty_values) >= 2:
-                header_index = index
-                break
-
-        if header_index is None:
-            raise ValueError(
-                f"No valid header row found in sheet: {sheet_name}"
+        for sheet_name in sheet_names:
+            extracted = extract_tabular_data(
+                temp_path,
+                sheet_name=sheet_name
             )
 
-        # Set the detected row as the column headings.
-        headers = dataframe.loc[header_index].tolist()
+            result[sheet_name] = {
+                "columns": extracted["columns"],
+                "row_count": extracted["row_count"],
+                "data": extracted["rows"],
+            }
 
-        cleaned_headers = []
-
-        for index, header in enumerate(headers):
-            if pd.isna(header):
-                cleaned_headers.append(f"Column_{index + 1}")
-            else:
-                cleaned_headers.append(str(header).strip())
-
-        dataframe = dataframe.loc[header_index + 1:].copy()
-
-        dataframe.columns = cleaned_headers
-
-        # Remove completely empty data rows.
-        dataframe = dataframe.dropna(
-            axis=0,
-            how="all"
-        )
-
-        # Replace missing values with None.
-        dataframe = dataframe.astype(object).where(
-            pd.notna(dataframe),
-            None
-        )
-
-        result[sheet_name] = {
-            "columns": cleaned_headers,
-            "row_count": len(dataframe),
-            "data": dataframe.to_dict(orient="records"),
+        return {
+            "file_type": "excel",
+            "sheet_count": len(result),
+            "sheets": result,
         }
 
-    return {
-        "file_type": "excel",
-        "sheet_count": len(result),
-        "sheets": result,
-    }
+    finally:
+        temp_path.unlink(missing_ok=True)
