@@ -100,6 +100,7 @@ def process_claimed_job(job, stdout=None, stderr=None):
 
         # Extract document data
         result = extract_document(file_data, job.file_name)
+        job.extracted_data = result
 
         # Validate extracted result path within MEDIA_ROOT before writing
         result_path = get_validated_extracted_result_path(
@@ -116,7 +117,7 @@ def process_claimed_job(job, stdout=None, stderr=None):
         # Mark job as completed
         job.status = ProcessingJob.Status.COMPLETED
         job.error_message = ""
-        job.save(update_fields=["status", "error_message", "updated_at"])
+        job.save(update_fields=["status", "error_message", "updated_at", "extracted_data"])
 
         try:
             logger.info(
