@@ -13,6 +13,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from app.report_generators.excel_generator import generate_excel_report
+from app.report_generators.document_excel_generator import generate_document_excel_report
+from app.report_generators.pdf_generator import generate_pdf_report
 from app.security.django_adapter import (
     can_django_user_access_document,
     can_django_user_access_job,
@@ -808,44 +810,130 @@ def download_report(request, job_id, report_type):
         request.user,
         job,
     ):
-        raise Http404(
-            "Report not found."
-        )
+        raise Http404("Report not found.")
 
-    canonical = normalize_report_type(
-        report_type
-    )
+    canonical = normalize_report_type(report_type)
 
     if canonical is None:
-        raise Http404(
-            "Report not found."
-        )
+        raise Http404("Report not found.")
 
-    try:
+    # Generate PDF report directly from the stored extraction.
+    if canonical == "pdf":
 
-        file_path, download_filename, content_type = (
-            resolve_report_for_job(
-                job,
-                canonical,
+        if job.status != ProcessingJob.Status.COMPLETED:
+            raise Http404("Document processing is not completed.")
+
+        if not isinstance(job.extracted_data, dict):
+            raise Http404("Extracted document data is unavailable.")
+
+        try:
+            pdf_file = generate_pdf_report(
+                extracted_data=job.extracted_data,
+                job_id=job.id,
+                original_file_name=job.file_name,
+                processing_status=job.status,
+                created_at=job.created_at,
+                reviewed_data=job.reviewed_data,
             )
+
+        except (ValueError, TypeError):
+            logger.exception(
+                "PDF report generation failed for job %s",
+                job.id,
+            )
+            raise Http404("PDF report could not be generated.")
+
+        response = HttpResponse(
+            pdf_file.getvalue(),
+            content_type="application/pdf",
         )
+        response["Content-Disposition"] = (
+            f'attachment; filename="job_{job.id}_report.pdf"'
+        )
+        return response
+
+    # Generate Excel reports for invoices and general documents.
+    if canonical == "excel":
+
+        if job.status != ProcessingJob.Status.COMPLETED:
+            raise Http404("Document processing is not completed.")
+
+        try:
+            if (
+                isinstance(job.reviewed_data, dict)
+                and job.reviewed_data
+            ):
+                # Preserve the existing invoice Excel format.
+                excel_file = generate_excel_report(
+                    reviewed_data=job.reviewed_data,
+                    job_id=job.id,
+                    original_file_name=job.file_name,
+                    processing_status=job.status,
+                    created_at=job.created_at,
+                    generated_at=timezone.now(),
+                )
+
+            else:
+                # Generate a general-purpose document Excel report.
+                if not isinstance(job.extracted_data, dict):
+                    raise Http404(
+                        "Extracted document data is unavailable."
+                    )
+
+                excel_file = generate_document_excel_report(
+                    extracted_data=job.extracted_data,
+                    job_id=job.id,
+                    original_file_name=job.file_name,
+                    processing_status=job.status,
+                    created_at=job.created_at,
+                    reviewed_data=job.reviewed_data,
+                    generated_at=timezone.now(),
+                )
+
+            response = HttpResponse(
+                excel_file.getvalue(),
+                content_type=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "spreadsheetml.sheet"
+                ),
+            )
+
+            response["Content-Disposition"] = (
+                f'attachment; filename="job_{job.id}_report.xlsx"'
+            )
+
+            return response
+
+        except Http404:
+            raise
+
+        except Exception:
+            logger.exception(
+                "Excel report generation failed for job %s.",
+                job.id,
+            )
+            raise Http404(
+                "Unable to generate the Excel report."
+            )
+
+    # Preserve the existing resolver for other report types.
+    try:
+        file_path, download_filename, content_type = (
+            resolve_report_for_job(job, canonical)
+        )
+
 
     except ValueError:
-        raise Http404(
-            "Report not found."
-        )
+        raise Http404("Report not found.")
 
     if file_path is None:
-        raise Http404(
-            "Report has not been generated yet."
-        )
+        raise Http404("Report has not been generated yet.")
 
     return serve_secure_file(
         file_path=file_path,
         download_filename=download_filename,
         content_type=content_type,
     )
-
 
 # ============================================================
 # ADDITIONAL BACKWARD-COMPATIBLE ALIASES
