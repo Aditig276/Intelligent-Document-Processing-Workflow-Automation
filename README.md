@@ -194,6 +194,11 @@ The Week 1 file-upload API has been implemented, tested, committed, and pushed t
 
 The overall project is still under development, with additional components being developed by the team.
 
+The initial file-upload API has been implemented and integrated
+with the subsequent document-processing features. The project
+has progressed through document extraction, OCR, report
+generation, dashboard development and processing history.
+
 ### Week 2 — PDF Text Extraction & Optical Character Recognition (OCR)
 
 The objective of Week 2 was to implement document text extraction functionality for digital PDFs, scanned PDFs, and images. The extraction system was developed using PyMuPDF and Tesseract OCR and integrated with the existing Django file-processing application.
@@ -687,3 +692,81 @@ The following activities have been implemented and tested:
 **Current Status:** Excel report generation and authenticated download functionality implemented and tested.
 
 **Note:** Persistent storage of generated report references and final integration requirements remain subject to project-level coordination.
+
+
+#### 6. Dashboard and Processing History
+
+Implemented a dashboard to provide an overview of document-processing activities.
+
+**Dashboard features:**
+
+- Total processing jobs.
+- Completed jobs.
+- Pending jobs.
+- Currently processing jobs.
+- Failed jobs.
+- Processing history table.
+- Search documents by filename.
+- Filter jobs by processing status.
+- View individual processing-job details.
+
+The dashboard displays processing information for jobs the logged-in user is authorized to access.
+
+**Dashboard URL:**
+
+`/dashboard/`
+
+**Implementation status:** Dashboard and processing-history functionality implemented and integrated.
+
+
+
+
+## Current Project Status
+
+The project has progressed through the initial file-upload implementation, document extraction, OCR integration, report generation, and dashboard development.
+
+### Completed Milestones
+
+- **Week 1 – File Upload API:** Document upload, file validation, size restrictions, content validation and metadata generation.
+- **Week 2 – PDF Extraction and OCR:** Digital PDF extraction using PyMuPDF and scanned document/image text recognition using Tesseract OCR.
+- **Week 3 – Dashboard and Processing History:** Dashboard summary, processing-job history, job details, search and status filtering.
+- **Week 3 – Excel Report Generation:** Structured Excel report generation using openpyxl, with reviewed document data and authenticated report downloads.
+
+### Week 4 – Accuracy Evaluation, Security and Release
+
+The current focus is on:
+
+- Evaluating document extraction results against manually verified data.
+- Testing scanned, invalid, empty and corrupted documents.
+- Reviewing authentication, authorization and secure file access.
+- Performing regression and integration testing.
+- Updating project documentation and preparing the final demonstration.
+
+Week 4 activities should be marked complete only after their implementation and validation.
+
+### Latest Test Execution
+
+**Date:** 14 November 2026
+
+Command executed:
+
+```bash
+python manage.py test
+```
+
+Results:
+
+- Total tests discovered: 17
+- Tests passed: 17
+- Tests failed: 0
+- Django system check: No issues identified.
+- Execution time: 13.123 seconds.
+
+**Overall result: PASS**
+
+These results represent the full Django test run performed on the above date. They should not be confused with the separately documented Week 2 extraction tests.
+
+### Project Development Status
+
+The project is undergoing final evaluation, integration testing, security review and documentation updates before the final demonstration.
+
