@@ -142,18 +142,22 @@ def upload_document(request):
                 request,
                 "processing_jobs/upload.html",
                 {"error": "Please select a file to upload."},
-                status=400,
             )
 
         safe_name = Path(uploaded_file.name).name
         extension = Path(safe_name).suffix.lower()
 
         if extension not in ALLOWED_EXTENSIONS:
+            safe_log(
+                logger.warning,
+                "Unsupported file type rejected. File=%s, User=%s",
+                safe_name,
+                request.user.username,
+            )
             return render(
                 request,
                 "processing_jobs/upload.html",
                 {"error": "Unsupported file type."},
-                status=400,
             )
 
         if uploaded_file.size == 0:
@@ -161,7 +165,6 @@ def upload_document(request):
                 request,
                 "processing_jobs/upload.html",
                 {"error": "Empty files are not allowed."},
-                status=400,
             )
 
         if uploaded_file.size > MAX_FILE_SIZE:
@@ -405,7 +408,7 @@ def extract_job(request, job_id):
 
         safe_log(
             logger.exception,
-            "Job %s extraction failed.",
+            "Job %s extraction failed: %s",
             job.id,
             error,
             exc_info=True,
@@ -436,6 +439,13 @@ def job_detail(request, job_id):
         raise Http404("Job not found.")
 
     if not can_django_user_access_job(request.user, job):
+        safe_log(
+            auth_logger.warning,
+            "Unauthorized detail access attempt by user %s for job %s owned by %s",
+            request.user.username,
+            job.id,
+            job.owner.username if job.owner else "unowned",
+        )
         raise Http404("Job not found.")
 
     result = None
@@ -520,6 +530,13 @@ def download_result(request, job_id):
         )
 
     if not can_django_user_access_job(request.user, job):
+        safe_log(
+            auth_logger.warning,
+            "Unauthorized download attempt by user %s for job %s owned by %s",
+            request.user.username,
+            job.id,
+            job.owner.username if job.owner else "unowned",
+        )
         raise Http404(
             "Extraction result was not found."
         )
@@ -647,9 +664,10 @@ def download_result(request, job_id):
 
     safe_log(
         logger.info,
-        "Extraction result downloaded: job_id=%s, user=%s",
+        "Extraction result downloaded: job_id=%s, user=%s, filename=%s",
         job.id,
         request.user.username,
+        job.file_name,
     )
 
     response = HttpResponse(
