@@ -1,9 +1,13 @@
 import csv
 import io
+import os
+import tempfile
 from pathlib import Path
 
-import pymupdf
 import pandas as pd
+
+from app.extractors.extraction_service import extract_document_text
+
 
 
 def extract_document(file_data, file_name):
@@ -55,30 +59,39 @@ def extract_csv(file_data):
 
 
 def extract_pdf(file_data):
-    document = pymupdf.open(
-        stream=file_data,
-        filetype="pdf"
-    )
+    temp_path = None
 
-    if document.page_count == 0:
-        raise ValueError("Empty PDF file")
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".pdf",
+            delete=False
+        ) as temp_file:
+            temp_file.write(file_data)
+            temp_path = temp_file.name
 
-    pages = []
+        result = extract_document_text(temp_path)
 
-    for page_number, page in enumerate(document, start=1):
-        pages.append({
-            "page": page_number,
-            "text": page.get_text()
-        })
+        pages = [
+            {
+                "page": page["page_number"],
+                "text": page["text"]
+            }
+            for page in result["pages"]
+        ]
 
-    return {
-        "file_type": "pdf",
-        "page_count": document.page_count,
-        "text": "\n".join(
-            page["text"] for page in pages
-        ),
-        "pages": pages,
-    }
+        return {
+            "file_type": "pdf",
+            "page_count": result["total_pages"],
+            "text": result["full_text"],
+            "pages": pages,
+        }
+
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
 
 def extract_excel(file_data, extension=None):
