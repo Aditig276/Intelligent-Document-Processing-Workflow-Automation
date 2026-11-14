@@ -122,3 +122,11 @@ def test_tc_w3_06_failure_is_logged(caplog):
     with caplog.at_level(logging.ERROR, logger="processing_jobs"):
         logger.error("integration-test simulated processing failure", extra={"job_id": 123})
     assert any("simulated processing failure" in record.message for record in caplog.records)
+
+
+def test_tc_w3_07_scheduled_processing_endpoint_accepts_schedule(client):
+    """Schedule a future/recurring job through the app's scheduling endpoint."""
+    url = optional_url("processing_jobs:schedule", "jobs:schedule",
+                        "scheduler:create", "reports:schedule")
+    response = client.post(url, data={"job_id": 1, "schedule": "daily"})
+    assert response.status_code in {200, 201, 302}
