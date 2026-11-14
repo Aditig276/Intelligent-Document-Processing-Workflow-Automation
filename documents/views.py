@@ -11,6 +11,7 @@ import csv
 import tempfile
 import logging
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -19,7 +20,10 @@ from django.shortcuts import render
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
+from app.security.django_adapter import can_django_user_access_job
+from processing_jobs.api_auth import authenticate_api_request
 from processing_jobs.models import ProcessingJob
+from processing_jobs.security import InvalidMediaPathError, validate_media_path
 
 from app.extractors.extraction_service import extract_document_text
 from app.extractors.pdf_extractor import PDFExtractionError
@@ -233,6 +237,9 @@ def upload_file(request):
 @require_POST
 def extract_file(request):
     """Extract text from an uploaded PDF or image."""
+    user, auth_error = authenticate_api_request(request)
+    if auth_error is not None:
+        return auth_error
 
     uploaded_file = request.FILES.get("file")
 
@@ -290,10 +297,14 @@ def extract_file(request):
 
             return JsonResponse(result, status=200)
 
+    except FileNotFoundError:
+        return JsonResponse(
+            {"error": "Requested file could not be found."},
+            status=400,
+        )
     except (
         PDFExtractionError,
         OCRExtractionError,
-        FileNotFoundError,
         ValueError,
     ) as exc:
         return JsonResponse(
@@ -310,6 +321,7 @@ def extract_file(request):
 
 
 
+@login_required
 def extraction_review(request):
     extracted_data = {
         "document_name": "",
@@ -357,7 +369,7 @@ def extraction_review(request):
                     extracted_text = result.get("full_text", "")
 
                     job = ProcessingJob.objects.create(
-                        owner=request.user if request.user.is_authenticated else None,
+                        owner=request.user,
                         file_name=original_name,
                         file_type=extension.lstrip("."),
                         file_size=uploaded_file.size,
@@ -375,74 +387,80 @@ def extraction_review(request):
                     errors["document"] = "Document extraction failed."
 
         # Save reviewed fields
-        elif request.POST.get("job_id"):
+        elif "job_id" in request.POST:
+            raw_job_id = request.POST.get("job_id", "").strip()
             try:
-                job = ProcessingJob.objects.get(
-                    id=request.POST.get("job_id")
-                )
+                target_job_id = int(raw_job_id)
+                job = ProcessingJob.objects.get(id=target_job_id)
+            except (ValueError, TypeError, ProcessingJob.DoesNotExist):
+                errors["document"] = "Processing job not found."
+                job = None
 
-                if job.owner_id and job.owner_id != request.user.id:
+            if job is not None:
+                if not can_django_user_access_job(request.user, job):
                     errors["document"] = "You cannot access this document."
                 else:
-                    file_path = Path(settings.MEDIA_ROOT) / Path(
-                        job.storage_reference
-                    ).name
-
-                    if not file_path.is_file():
+                    try:
+                        file_path = validate_media_path(
+                            job.storage_reference,
+                            must_exist=True,
+                            expect_file=True,
+                        )
+                    except InvalidMediaPathError:
                         errors["document"] = "Uploaded document not found."
-                    else:
-                        result = extract_document_text(str(file_path))
-                        extracted_text = result.get("full_text", "")
-                        job_id = str(job.id)
+                        file_path = None
 
-                        for field in extracted_data:
-                            extracted_data[field] = request.POST.get(
-                                field, ""
-                            ).strip()
+                    if file_path:
+                        try:
+                            result = extract_document_text(str(file_path))
+                            extracted_text = result.get("full_text", "")
+                            job_id = str(job.id)
 
-                        for field, value in extracted_data.items():
-                            if not value:
-                                errors[field] = "This field is required."
+                            for field in extracted_data:
+                                extracted_data[field] = request.POST.get(
+                                    field, ""
+                                ).strip()
 
-                        if extracted_data["document_date"]:
-                            try:
-                                datetime.strptime(
-                                    extracted_data["document_date"],
-                                    "%Y-%m-%d"
-                                )
-                            except ValueError:
-                                errors["document_date"] = (
-                                    "Enter date in YYYY-MM-DD format."
-                                )
+                            for field, value in extracted_data.items():
+                                if not value:
+                                    errors[field] = "This field is required."
 
-                        if extracted_data["total_amount"]:
-                            try:
-                                amount = Decimal(
-                                    extracted_data["total_amount"]
-                                )
-                                if not amount.is_finite() or amount < 0:
-                                    raise InvalidOperation
-                            except (InvalidOperation, ValueError):
-                                errors["total_amount"] = (
-                                    "Enter a valid non-negative amount."
-                                )
+                            if extracted_data["document_date"]:
+                                try:
+                                    datetime.strptime(
+                                        extracted_data["document_date"],
+                                        "%Y-%m-%d"
+                                    )
+                                except ValueError:
+                                    errors["document_date"] = (
+                                        "Enter date in YYYY-MM-DD format."
+                                    )
 
-                        if errors:
-                            message = "Please correct the highlighted fields."
-                        else:
-                            job.reviewed_data = extracted_data
-                            job.save(update_fields=[
-                                "reviewed_data",
-                                "updated_at",
-                            ])
-                            message = "Reviewed data saved successfully."
+                            if extracted_data["total_amount"]:
+                                try:
+                                    amount = Decimal(
+                                        extracted_data["total_amount"]
+                                    )
+                                    if not amount.is_finite() or amount < 0:
+                                        raise InvalidOperation
+                                except (InvalidOperation, ValueError):
+                                    errors["total_amount"] = (
+                                        "Enter a valid non-negative amount."
+                                    )
 
-            except ProcessingJob.DoesNotExist:
-                errors["document"] = "Processing job not found."
+                            if errors:
+                                message = "Please correct the highlighted fields."
+                            else:
+                                job.reviewed_data = extracted_data
+                                job.save(update_fields=[
+                                    "reviewed_data",
+                                    "updated_at",
+                                ])
+                                message = "Reviewed data saved successfully."
 
-            except Exception:
-                logger.exception("Review saving failed")
-                errors["document"] = "Unable to save reviewed data."
+                        except Exception:
+                            logger.exception("Review saving failed")
+                            errors["document"] = "Unable to save reviewed data."
 
     return render(
         request,

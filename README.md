@@ -194,6 +194,11 @@ The Week 1 file-upload API has been implemented, tested, committed, and pushed t
 
 The overall project is still under development, with additional components being developed by the team.
 
+The initial file-upload API has been implemented and integrated
+with the subsequent document-processing features. The project
+has progressed through document extraction, OCR, report
+generation, dashboard development and processing history.
+
 ### Week 2 — PDF Text Extraction & Optical Character Recognition (OCR)
 
 The objective of Week 2 was to implement document text extraction functionality for digital PDFs, scanned PDFs, and images. The extraction system was developed using PyMuPDF and Tesseract OCR and integrated with the existing Django file-processing application.
@@ -688,42 +693,47 @@ The following activities have been implemented and tested:
 
 **Note:** Persistent storage of generated report references and final integration requirements remain subject to project-level coordination.
 
- 
 
-**### Week 4 — PDF Extraction & OCR Evaluation**
+## Dashboard and Processing History
 
-The objective of Week 4 was to evaluate the PDF extraction and OCR functionality developed earlier. The evaluation focused on digital PDF text extraction, scanned PDF OCR, image text recognition, invalid document handling, and integration with the existing Django processing application.
+Implemented a dashboard to provide an overview of document-processing activities.
 
-**#### 1. Evaluation Environment**
+**Dashboard features:**
+- Total processing jobs.
+- Completed, pending, processing and failed jobs.
+- Processing history table.
+- Search documents by filename.
+- Filter jobs by processing status.
+- View individual processing-job details.
 
-The following tools and libraries were used:
+The dashboard displays processing information for jobs the logged-in user is authorized to access.
 
-- **PyMuPDF:** Digital PDF text extraction and PDF page processing.
+**Dashboard URL:** `/dashboard/`
+
+**Implementation status:** Implemented and integrated.
+
+---
+
+## Week 4 — PDF Extraction & OCR Evaluation
+
+The objective was to evaluate PDF extraction and OCR functionality, including digital PDF extraction, scanned PDF OCR, image recognition, invalid document handling and Django integration.
+
+### 1. Evaluation Environment
+
+- **PyMuPDF:** Digital PDF text extraction.
 - **Tesseract OCR:** Text recognition from scanned documents.
-- **pytesseract:** Python integration with Tesseract OCR.
+- **pytesseract:** Python integration with Tesseract.
 - **Pillow:** Image processing and validation.
-- **Django:** Integration with the existing document-processing application.
+- **Django:** Integration with the document-processing application.
 
-Tesseract OCR was configured on Windows using the executable path:
-
-```python
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-)
-```
-
-Verified Tesseract installation:
+Tesseract was configured on Windows.
 
 - Tesseract version: `5.5.3.20260724`
 - OCR language: English (`eng`)
 
-**#### 2. Digital PDF Extraction Evaluation**
+### 2. Digital PDF Extraction
 
-Tested digital PDF extraction using a manually generated invoice document.
-
-**Sample file:** `sample_invoice.pdf`
-
-**Expected and extracted information:**
+**Sample:** `sample_invoice.pdf`
 
 | Field | Extracted value |
 |---|---|
@@ -731,18 +741,13 @@ Tested digital PDF extraction using a manually generated invoice document.
 | Customer Name | Mallikarjun |
 | Total Amount | 5000 |
 
-**Result:** Successfully extracted the expected invoice information using PyMuPDF.
+**Result:** Expected invoice information was successfully extracted using PyMuPDF.
 
-**#### 3. Scanned PDF and Image OCR Evaluation**
-
-Evaluated OCR functionality using scanned invoice documents and image samples.
+### 3. Scanned PDF and Image OCR
 
 **Sample files:**
-
 - `sample_scanned_invoice.pdf`
 - `sample_scanned_invoice.png`
-
-**Extracted information:**
 
 | Field | Extracted value |
 |---|---|
@@ -750,135 +755,121 @@ Evaluated OCR functionality using scanned invoice documents and image samples.
 | Customer Name | Mallikarjun |
 | Total Amount | 7500 |
 
-**Result:** Successfully recognized the expected invoice information using Tesseract OCR.
+**Result:** Expected invoice information was recognized using Tesseract OCR.
 
-The scanned PDF was processed through the OCR fallback mechanism, while the PNG image was processed directly using the image OCR module.
+The scanned PDF used the OCR fallback mechanism, while the PNG image was processed directly.
 
-**#### 4. Invalid and Empty File Evaluation**
+### 4. Invalid and Empty File Evaluation
 
-Tested the extraction modules with corrupted and empty documents to verify error handling.
-
-| Test Case | Input File | Observed Result |
+| Test case | Input | Result |
 |---|---|---|
-| Corrupted PDF | `corrupted.pdf` | Rejected with PDFExtractionError |
-| Corrupted Image | `corrupted.png` | Rejected with OCRExtractionError |
-| Empty PDF | `empty.pdf` | Rejected with PDFExtractionError |
-| Empty Image | `empty.png` | Rejected with OCRExtractionError |
+| Corrupted PDF | `corrupted.pdf` | Rejected |
+| Corrupted image | `corrupted.png` | Rejected |
+| Empty PDF | `empty.pdf` | Rejected |
+| Empty image | `empty.png` | Rejected |
 
-**Result:** All four invalid or empty file cases were handled correctly, and appropriate extraction errors were returned.
+All four cases returned appropriate extraction errors.
 
-**#### 5. PDF Adapter Integration**
+### 5. PDF Adapter Integration
 
-Updated `processing_jobs/extractors.py` to integrate the existing PDF/OCR extraction service with the processing-job application.
+Updated `processing_jobs/extractors.py` to integrate the PDF/OCR extraction service.
 
-**Implementation includes:**
-
+Implementation includes:
 1. Writing incoming PDF bytes to a temporary PDF file.
 2. Calling the existing `extract_document_text()` service.
 3. Supporting digital PDF extraction and scanned PDF OCR fallback.
-4. Mapping extracted page information into the adapter's expected response format.
-5. Returning document type, page count, complete text, and page-wise text.
+4. Mapping extracted page information into the expected response format.
+5. Returning document type, page count, complete text and page-wise text.
 6. Attempting temporary-file cleanup after extraction.
 
-The adapter maintains a consistent response structure containing:
+### 6. OCR Error Observation
 
-- `file_type`
-- `page_count`
-- `text`
-- `pages`
+During an earlier scanned PDF evaluation, Tesseract recognized the expected amount `7500` as `7600`.
 
-**#### 6. OCR Error Observation**
+The expected value was retained as ground truth, and the test assertion was not weakened.
 
-During an earlier scanned PDF evaluation, Tesseract incorrectly recognized the expected amount `7500` as `7600`.
+The sample was improved by increasing image dimensions and using a clearer Arial font. The targeted scanned PDF integration test subsequently passed.
 
-The expected value was retained as the ground truth, and the test assertion was not weakened.
+**Observation:** OCR recognition can be affected by image resolution, font clarity and document quality. This sample result is not a general OCR accuracy benchmark.
 
-To improve recognition, the generated scanned sample was modified by increasing image dimensions and using a clearer Arial font.
+### 7. Automated Integration Testing
 
-After improving the sample, the targeted scanned PDF OCR integration test passed successfully.
+Five PDF/OCR integration tests were added to `processing_jobs/tests.py`.
 
-**Observation:** OCR recognition can be affected by image resolution, font clarity, and document quality. The successful result applies to the improved test sample and does not represent a general OCR accuracy benchmark.
-
-**#### 7. Automated Integration Testing**
-
-Added five PDF/OCR integration tests to `processing_jobs/tests.py`.
-
-| Test Case | Purpose |
+| Test case | Purpose |
 |---|---|
-| Digital PDF extraction | Verifies text extraction from digital PDFs |
-| Scanned PDF uses OCR | Verifies OCR fallback for scanned PDFs |
+| Digital PDF extraction | Verifies digital PDF text extraction |
+| Scanned PDF uses OCR | Verifies OCR fallback |
 | Corrupted PDF rejection | Verifies invalid PDF handling |
 | Empty PDF rejection | Verifies empty PDF handling |
 | Temporary PDF cleanup | Verifies temporary-file cleanup |
 
-**Targeted scanned PDF test:**
-
+**Targeted test:**
 ```powershell
 python manage.py test processing_jobs.tests.PDFOCRIntegrationTests.test_scanned_pdf_uses_ocr -v 2
 ```
 
-**Result:** 1 test passed.
+Result: 1 test passed.
 
 **Full Django test suite:**
-
 ```powershell
 python manage.py test
 ```
 
-**Final test results:**
-
-- Total tests discovered: 22
-- Tests passed: 22
-- Tests failed: 0
+- Total tests: 22
+- Passed: 22
+- Failed: 0
 - Execution time: 12.489 seconds
-- Django system check: No issues identified
+- Django system check: No issues identified.
 
-**Overall Result:** All 22 automated tests passed successfully.
+**Overall result: PASS**
 
-**#### 8. Git and Version Control**
+### 8. Git and Version Control
 
-The Week 4 code changes were committed and pushed to the dedicated feature branch.
-
-**Branch:**
-
-`feature/pdf-ocr-evaluation`
+**Branch:** `feature/pdf-ocr-evaluation`
 
 **Files updated:**
-
 - `processing_jobs/extractors.py`
 - `processing_jobs/tests.py`
 
-**Commit details:**
+**Commit:** `c3a272d`
 
-- Commit ID: `c3a272d`
-- Commit message: `feat: integrate PDF OCR extraction and add evaluation tests`
+**Commit message:** `feat: integrate PDF OCR extraction and add evaluation tests`
 
-The changes were successfully pushed to the remote GitHub branch:
+### 9. Week 4 Completion Status
 
-[View PDF/OCR Evaluation Branch](https://github.com/Aditig276/Intelligent-Document-Processing-Workflow-Automation/tree/feature/pdf-ocr-evaluation)
+The following activities were completed for the tested sample documents:
 
-**#### 9. Week 4 Completion Status**
-
-The following activities were completed:
-
-- Digital PDF extraction evaluated successfully.
-- Scanned PDF OCR evaluated successfully.
-- Image OCR evaluated successfully.
-- Corrupted PDF and image handling verified.
-- Empty PDF and image handling verified.
-- PDF adapter integrated with the existing extraction service.
+- Digital PDF extraction evaluated.
+- Scanned PDF OCR evaluated.
+- Image OCR evaluated.
+- Corrupted and empty file handling verified.
+- PDF adapter integrated.
 - Five PDF/OCR integration tests added.
-- All 22 Django automated tests passed.
-- Code changes committed and pushed to GitHub.
+- All 22 Django tests passed.
+- Changes committed and pushed.
 
-**Current Status:** Week 4 PDF/OCR integration and evaluation completed for the tested sample documents.
+**Current status:** PDF/OCR integration and evaluation completed for the tested samples.
 
-**#### 10. Limitations and Future Improvements**
+### 10. Limitations and Future Improvements
 
 - Evaluate OCR using a larger collection of real-world documents.
-- Test low-resolution, rotated, and noisy scanned documents.
+- Test low-resolution, rotated and noisy scanned documents.
 - Measure field-level OCR accuracy using manually verified values.
-- Move the Tesseract executable path into environment-based configuration for easier team setup.
-- Perform additional end-to-end testing of the complete Django upload-to-extraction workflow.
+- Move the Tesseract executable path into environment-based configuration.
+- Perform additional end-to-end testing of the upload-to-extraction workflow.
 
-**Note:** The current evaluation demonstrates successful functionality on controlled sample documents. Broader OCR accuracy and document compatibility testing remain future improvements.
+---
+
+## Current Project Status
+
+The project has progressed through the following milestones:
+
+- **Week 1:** File upload API and validation.
+- **Week 2:** PDF extraction and OCR integration.
+- **Week 3:** Dashboard, processing history and Excel report generation.
+- **Week 4:** PDF/OCR evaluation, integration testing and documentation.
+
+The latest reported full Django test run for the PDF/OCR evaluation branch passed all 22 tests.
+
+The project has demonstrated the core document-processing workflow. Broader OCR accuracy evaluation, additional real-world document testing and deployment improvements remain future work.
