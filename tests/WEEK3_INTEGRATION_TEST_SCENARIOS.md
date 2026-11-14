@@ -14,19 +14,20 @@ python -m pip install -r tests/requirements-test.txt
 python -m pytest tests/test_week3_integration.py -v
 ```
 
-The report and Celery checks skip when their feature modules/URL routes have not yet been merged into this branch. A skip means **not integrated / not verified**, not a pass. Run again after report-generation and background-processing branches are integrated.
+Report, Celery and scheduling checks skip when their feature modules/routes have not yet been integrated into this branch. A skip means **not integrated / not verified**, not a pass. Re-run after report-generation and background-processing branches are integrated.
 
 ## Test cases
 
 | ID | Scenario | Expected result |
 |---|---|---|
-| TC-W3-01 | Generate Excel report for completed job | HTTP 200, attachment, valid XLSX ZIP signature |
-| TC-W3-01 | Generate PDF report for completed job | HTTP 200, attachment, PDF signature `%PDF` |
+| TC-W3-01 Excel | Generate Excel report for completed job | HTTP 200, attachment, valid XLSX ZIP signature |
+| TC-W3-01 PDF | Generate PDF report for completed job | HTTP 200, attachment, PDF signature `%PDF` |
 | TC-W3-02 | Generate report for unknown job | HTTP 404 |
 | TC-W3-03 | Open processing history | Source filename and job/status entry are visible |
 | TC-W3-04 | Execute background task for pending job | Job reaches completed state |
-| TC-W3-05 | Execute failed task and retry | Error is recorded; retry clears error and completes (when retry is supported) |
+| TC-W3-05 | Failed job and retry | Error is recorded; retry clears error and completes (when retry is supported) |
 | TC-W3-06 | Processing failure logging | Error diagnostic is emitted to application logger |
+| TC-W3-07 | Submit a scheduled-processing request | Schedule endpoint accepts request (HTTP 200/201/302) |
 
 ## Result recording
 
@@ -39,5 +40,6 @@ The report and Celery checks skip when their feature modules/URL routes have not
 | TC-W3-04 | Pending integration | Celery task + broker/worker setup |
 | TC-W3-05 | Pending integration | Retry configuration + task output |
 | TC-W3-06 | Pending execution | Captured log output |
+| TC-W3-07 | Pending integration | Scheduler endpoint/configuration output |
 
-> Do not mark tests passed until they have been run against the integrated Week 3 modules. Save the terminal output (including skipped tests and tracebacks) with the PR as test evidence.
+> Do not mark tests passed until they have been run against the integrated Week 3 modules. Save terminal output (including skipped tests and tracebacks) with the PR as test evidence.
