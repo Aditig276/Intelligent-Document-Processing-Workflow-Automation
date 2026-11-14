@@ -2,6 +2,7 @@
 
 import logging
 import mimetypes
+import os
 from pathlib import Path
 import stat
 
@@ -36,6 +37,127 @@ CONTENT_TYPE_MAPPING = {
     ".tiff": "image/tiff",
 }
 
+ALLOWED_SERVE_CONTENT_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/csv",
+    "text/csv; charset=utf-8",
+    "application/json",
+    "image/png",
+    "image/jpeg",
+    "image/tiff",
+    "application/octet-stream",
+}
+
+
+GENERIC_USER_ERROR = "An error occurred while processing the document."
+
+
+def sanitize_error_message(error: Exception | str) -> str:
+    r"""Sanitize error messages to prevent disclosing internal server filesystem paths.
+
+    Strips:
+    - settings.MEDIA_ROOT and settings.BASE_DIR.
+    - Windows drive paths (including paths with spaces and unusual characters).
+    - Windows UNC network paths (e.g. \\server\share\...).
+    - Unix/POSIX absolute directory hierarchies (including paths with spaces).
+    - Internal traceback lines.
+
+    If path remnants or raw system tracebacks cannot be safely sanitized,
+    falls back to a generic user-facing error message.
+    """
+    if not error:
+        return ""
+
+    text = str(error).strip()
+    if not text:
+        return ""
+
+    # Check for raw traceback headers
+    if "Traceback (most recent call last):" in text:
+        return GENERIC_USER_ERROR
+
+    media_root = str(getattr(settings, "MEDIA_ROOT", "")).strip()
+    base_dir = str(getattr(settings, "BASE_DIR", "")).strip()
+
+    if media_root:
+        text = text.replace(media_root, "[MEDIA_ROOT]")
+        text = text.replace(media_root.replace("\\", "/"), "[MEDIA_ROOT]")
+    if base_dir:
+        text = text.replace(base_dir, "[BASE_DIR]")
+        text = text.replace(base_dir.replace("\\", "/"), "[BASE_DIR]")
+
+    import re
+
+    # 1. Sanitize Windows UNC paths (e.g. \\server\share\folder with spaces\file.pdf)
+    def _clean_unc(m):
+        raw = m.group(0).rstrip(".,;)'\"")
+        parts = [p for p in raw.replace("/", "\\").split("\\") if p]
+        return parts[-1] if parts else "[FILE]"
+
+    text = re.sub(r"\\\\[^:*?\"<>|\r\n\t]+", _clean_unc, text)
+    text = re.sub(r"//[^:*?\"<>|\r\n\t]+", _clean_unc, text)
+
+    # 2. Sanitize Windows drive paths (e.g. C:\folder with spaces\file.pdf)
+    def _clean_win(m):
+        raw = m.group(0).rstrip(".,;)'\"")
+        parts = [p for p in raw.replace("/", "\\").split("\\") if p]
+        return parts[-1] if parts else "[FILE]"
+
+    text = re.sub(r"[A-Za-z]:[\\/][^:*?\"<>|\r\n\t]+", _clean_win, text)
+
+    # 3. Sanitize Unix/POSIX paths (e.g. /var/log/secret folder/file.pdf)
+    def _clean_unix(m):
+        raw = m.group(0).rstrip(".,;)'\"")
+        parts = [p for p in raw.split("/") if p]
+        return parts[-1] if parts else "[FILE]"
+
+    text = re.sub(r"/(?:[^/\0\r\n\t]+/)+[^/\0\r\n\t]+", _clean_unix, text)
+
+    # Normalize double spaces
+    text = re.sub(r"\s+", " ", text).strip()
+
+    # If any raw path separators remain attached to drive letters or UNC prefixes,
+    # fall back to generic error message
+    if re.search(r"[A-Za-z]:[\\/]|\\\\", text):
+        return GENERIC_USER_ERROR
+
+    return text
+
+
+def _get_descriptor_path(file_handle) -> Path | None:
+    """Resolve the canonical filesystem path of an open file descriptor across platforms."""
+    try:
+        fd = file_handle.fileno()
+    except Exception:
+        return None
+
+    # Windows: resolve real target path of the open file handle via Kernel32
+    if os.name == "nt":
+        try:
+            import msvcrt
+            import ctypes
+            handle = msvcrt.get_osfhandle(fd)
+            buf = ctypes.create_unicode_buffer(1024)
+            ret = ctypes.windll.kernel32.GetFinalPathNameByHandleW(handle, buf, 1024, 0)
+            if ret > 0:
+                p = buf.value
+                if p.startswith("\\\\?\\"):
+                    p = p[4:]
+                return Path(p).resolve()
+        except Exception:
+            pass
+    # Linux: resolve canonical target from /proc/self/fd
+    elif hasattr(os, "readlink"):
+        try:
+            proc_path = f"/proc/self/fd/{fd}"
+            if os.path.exists(proc_path):
+                return Path(os.readlink(proc_path)).resolve()
+        except Exception:
+            pass
+    return None
+
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize a filename for safe HTTP Content-Disposition headers.
@@ -48,7 +170,11 @@ def sanitize_filename(filename: str) -> str:
     base = Path(str(filename)).name.replace("\\", "/").split("/")[-1]
     # Remove control characters, quotes, and newlines
     clean = "".join(c for c in base if c.isalnum() or c in ("-", "_", ".", " ")).strip()
-    return clean or "download"
+    # Strip leading/trailing dots and spaces to prevent traversal or extension masking
+    clean = clean.strip(". ")
+    if not clean or clean in (".", ".."):
+        return "download"
+    return clean
 
 
 def validate_media_path(
@@ -220,11 +346,76 @@ def serve_secure_file(
     safe_name = sanitize_filename(download_filename)
     ext = candidate.suffix.lower()
 
-    if not content_type:
-        content_type = CONTENT_TYPE_MAPPING.get(ext) or mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+    # Validate caller-supplied content_type against trusted whitelist
+    valid_content_type = None
+    if content_type:
+        normalized_type = str(content_type).strip().lower()
+        if (
+            "\r" not in normalized_type
+            and "\n" not in normalized_type
+            and normalized_type in ALLOWED_SERVE_CONTENT_TYPES
+        ):
+            valid_content_type = normalized_type
+        else:
+            safe_log(
+                logger.warning,
+                "Untrusted or malformed Content-Type '%s' rejected for %s; using safe mapping.",
+                content_type,
+                candidate.name,
+            )
+
+    if not valid_content_type:
+        valid_content_type = (
+            CONTENT_TYPE_MAPPING.get(ext)
+            or mimetypes.guess_type(safe_name)[0]
+            or "application/octet-stream"
+        )
+
+    # Determine base confinement directory
+    configured_root = base_dir if base_dir is not None else getattr(settings, "MEDIA_ROOT", None)
+    root = Path(configured_root).resolve() if configured_root else None
 
     try:
+        expected_stat = candidate.stat()
         file_handle = candidate.open("rb")
+        fd_stat = os.fstat(file_handle.fileno())
+
+        # 1. Validate that the opened descriptor represents a regular file
+        if not stat.S_ISREG(fd_stat.st_mode):
+            file_handle.close()
+            safe_log(logger.error, "Opened descriptor for %s is not a regular file", candidate.name)
+            raise Http404("File not found.")
+
+        # 2. Validate descriptor identity matches pre-validated file (detects TOCTOU file replacement)
+        if hasattr(os.path, "samestat") and expected_stat.st_ino != 0 and fd_stat.st_ino != 0:
+            if not os.path.samestat(expected_stat, fd_stat):
+                file_handle.close()
+                safe_log(logger.error, "File descriptor identity mismatch for %s", candidate.name)
+                raise Http404("File not found.")
+
+        # 3. Validate that the opened descriptor is strictly confined to MEDIA_ROOT (fail closed)
+        if root is not None:
+            real_fd_path = _get_descriptor_path(file_handle)
+            if real_fd_path is None:
+                file_handle.close()
+                safe_log(
+                    logger.error,
+                    "Failed closed: descriptor-path resolution returned None for %s",
+                    candidate.name,
+                )
+                raise Http404("File not found.")
+            try:
+                real_fd_path.relative_to(root)
+            except ValueError:
+                file_handle.close()
+                safe_log(
+                    logger.error,
+                    "Open descriptor escapes permitted root (%s): %s",
+                    root,
+                    real_fd_path,
+                )
+                raise Http404("File not found.")
+
     except OSError as exc:
         safe_log(logger.error, "Failed to open file %s: %s", candidate.name, exc)
         raise Http404("File not found.")
@@ -233,7 +424,7 @@ def serve_secure_file(
         file_handle,
         as_attachment=True,
         filename=safe_name,
-        content_type=content_type,
+        content_type=valid_content_type,
     )
     # Ensure X-Content-Type-Options is set
     response["X-Content-Type-Options"] = "nosniff"

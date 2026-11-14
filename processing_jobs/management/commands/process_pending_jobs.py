@@ -16,6 +16,7 @@ from processing_jobs.models import ProcessingJob
 from processing_jobs.security import (
     InvalidMediaPathError,
     get_validated_extracted_result_path,
+    sanitize_error_message,
     validate_media_path,
 )
 
@@ -69,14 +70,14 @@ def claim_next_job():
 def _mark_job_failed(job, error, stderr=None, *, is_security_rejection=False):
     """Persist FAILED status and log/emit failure details for a claimed job."""
     job.status = ProcessingJob.Status.FAILED
-    job.error_message = str(error)[:2000]
+    job.error_message = sanitize_error_message(error)[:2000]
     job.save(update_fields=["status", "error_message", "updated_at"])
 
     try:
         if is_security_rejection:
             logger.warning("Job %s rejected invalid media path: %s", job.id, error)
         else:
-            logger.error("Job %s failed: %s", job.id, error)
+            logger.error("Job %s failed: %s", job.id, error, exc_info=True)
     except Exception:
         pass
 

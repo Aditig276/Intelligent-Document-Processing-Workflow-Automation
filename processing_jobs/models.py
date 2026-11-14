@@ -52,8 +52,6 @@ class ProcessingJob(models.Model):
         default="",
     )
 
-    reviewed_data = models.JSONField(default=dict, blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

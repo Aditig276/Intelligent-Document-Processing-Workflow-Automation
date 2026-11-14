@@ -335,6 +335,10 @@ else:
 # Whether to trust X-Forwarded-For header (only when behind a trusted reverse proxy)
 SECURE_TRUST_FORWARDED_FOR = get_bool_env("SECURE_TRUST_FORWARDED_FOR", False)
 
+# Global cookie hardening and clickjacking defense
+SESSION_COOKIE_HTTPONLY = True
+X_FRAME_OPTIONS = "DENY"
+
 if not DEBUG and not RUNNING_TESTS:
     # Production security headers
     SECURE_SSL_REDIRECT = get_bool_env("SECURE_SSL_REDIRECT", False)
